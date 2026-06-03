@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     embedding_provider: str = "local"
     embedding_model: str = "bge-m3"
     embedding_vector_size: int = 1024
+    embedding_base_url: str = ""
+    embedding_api_key: str = Field(default="", repr=False)
     miniapp_public_url: str = "http://localhost:5173"
     enable_metrics: bool = True
     marketplace_write_mode: str = "dry_run"

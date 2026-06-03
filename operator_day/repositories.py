@@ -20,9 +20,9 @@ from operator_day.domain import (
     TaskStatus,
     TenantContext,
 )
+from operator_day.embeddings import EmbeddingService
 from operator_day.memory import (
     cosine_similarity,
-    local_embedding,
     memory_hash,
     normalize_memory_text,
 )
@@ -874,6 +874,7 @@ class MemoryRepository:
         embedding_model: str | None = None,
     ) -> SemanticMemory:
         await bind_tenant_scope(self.session, ctx)
+        settings = get_settings()
         normalized = normalize_memory_text(text)
         digest = memory_hash(normalized)
         existing = (
@@ -890,8 +891,9 @@ class MemoryRepository:
         row.title = title
         row.text = normalized
         row.text_hash = digest
-        row.embedding_model = embedding_model or get_settings().embedding_model
-        row.vector = local_embedding(normalized)
+        embedding = await EmbeddingService(settings).embed(normalized)
+        row.embedding_model = embedding_model or embedding.model
+        row.vector = embedding.vector
         row.payload = payload or {}
         if existing is None:
             self.session.add(row)
@@ -924,7 +926,7 @@ class MemoryRepository:
         if scope:
             db_query = db_query.where(SemanticMemory.scope == scope)
         rows = (await self.session.execute(db_query)).scalars().all()
-        query_vector = local_embedding(query)
+        query_vector = (await EmbeddingService(get_settings()).embed(query)).vector
         ranked = [
             (row, cosine_similarity(list(row.vector or []), query_vector))
             for row in rows

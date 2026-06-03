@@ -54,6 +54,8 @@ async def test_positive_review_confirmation_uses_llm_fallback() -> None:
     assert result.audit_event["connector_status"] == "accepted"
     assert result.audit_event["marketplace_operation"]["status"] == "planned"
     assert result.audit_event["marketplace_operation"]["planned_operation"]["dryRun"] is True
+    assert result.audit_event["execution_lifecycle"]["stages"][2]["name"] == "marketplace_planned"
+    assert result.audit_event["execution_lifecycle"]["rollback"]["mode"] == "discard_plan"
 
 
 async def test_ads_confirmation_builds_marketplace_bid_plan() -> None:
@@ -67,6 +69,7 @@ async def test_ads_confirmation_builds_marketplace_bid_plan() -> None:
     assert result.audit_event["action"] == "ads_bid_update_planned"
     assert result.audit_event["operation_id"] == "YM_UpdateCampaignBids"
     assert result.audit_event["marketplace_operation"]["planned_operation"]["safety"] == "write"
+    assert result.audit_event["execution_lifecycle"]["workflow"] == "operator_day_confirmed_action"
 
 
 async def test_reprice_confirmation_builds_marketplace_price_plan() -> None:

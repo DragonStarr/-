@@ -28,7 +28,9 @@ What is included now:
 - Claim candidate import endpoint; the morning bot builds reimbursement tasks from tenant DB data and marks deadlines as verified only when a source-linked policy exists.
 - PVZ point/staff import endpoint; the morning bot builds 2/2 schedules and payroll from tenant DB data instead of static employees.
 - Tenant-scoped semantic memory API stores seller rules, notes and decisions with sanitized text, local vectors and a pgvector-ready schema.
-- Self-update control plane snapshots upstream references, runs sandbox checks, LLM review, canary gates and rollback to last-known-good.
+- Tenant-scoped memory can call an OpenAI-compatible/BGE-M3 embedding endpoint from env and falls back to deterministic local vectors when the endpoint is unavailable.
+- Confirmed actions now carry a durable lifecycle checkpoint with collected, confirmed, marketplace planned/executed or human escalation, audit and rollback hints.
+- Self-update control plane snapshots upstream references, runs real sandbox checks, LLM review, canary gates and rollback to last-known-good.
 - Operator capability catalog: 30+ skills/plugins on every action and 10 required MCP-style checks in every action payload.
 - SQLAlchemy schema and Alembic migration skeleton for Postgres + pgvector-ready tenant isolation, including ads, claims, niches, content, semantic memory and account guard data.
 

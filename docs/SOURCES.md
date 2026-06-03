@@ -56,4 +56,6 @@
 - Yandex Market Partner API exposes bidding flows and campaign bid info; the documented bid-info page notes access scopes and current/legacy limits, so ЯМ ads actions should validate campaign access and scope before write.
 - `PCDCK/ozon-mcp` and `Jerardx/wildberries-mcp-server` independently support the same connector pattern: operation catalog, dry-run/read-write safety, rate-limit metadata, retry/429 handling and large-response discipline.
 - Runtime now uses local vendored payload builders in `vendor/marketplace_sdk/`; GitHub repositories and official docs are update inputs only, not runtime dependencies.
+- FlagEmbedding/BGE-M3 and OpenAI-compatible embedding APIs are used as memory architecture references; runtime keeps a local deterministic fallback so pilots do not depend on a third-party embedding service being online.
+- LangGraph durable execution patterns are used as architecture input for checkpointed action lifecycles, human confirmation and rollback hints; runtime keeps this as local lifecycle metadata until a production workflow engine is connected.
 - Claim deadlines from the notebook must stay configurable and source-linked (`claim_deadlines`) until official WB/Ozon/YM rules are verified.

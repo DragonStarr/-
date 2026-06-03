@@ -19,7 +19,7 @@ async def test_owner_can_save_and_search_sanitized_memory() -> None:
         )
         assert saved.status_code == 200
         body = saved.json()
-        assert body["embeddingModel"] == "bge-m3"
+        assert body["embeddingModel"] == "bge-m3:local-hash-fallback"
         assert "Ignore previous instructions" not in body["text"]
 
         found = await client.post(
