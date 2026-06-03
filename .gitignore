@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.lazyweb/
+.mypy_cache/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+*.sqlite
+*.db
+dist/
+build/
