@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -31,6 +33,33 @@ class SelfUpdateCandidate:
         }
 
 
+@dataclass(frozen=True)
+class CommandCheck:
+    name: str
+    argv: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    name: str
+    exit_code: int
+    output: str
+
+
+DEFAULT_CHECKS = (
+    CommandCheck("sandbox_build", ("uv", "run", "ruff", "check", ".")),
+    CommandCheck("contract_tests", ("uv", "run", "pytest")),
+)
+
+
+class SelfUpdateCommandRunner:
+    async def run(self, checks: tuple[CommandCheck, ...]) -> tuple[CommandResult, ...]:
+        results: list[CommandResult] = []
+        for check in checks:
+            results.append(await _run_allowed_command(check))
+        return tuple(results)
+
+
 class SelfUpdatePipeline:
     """Dry-run self-update gate for vendored code and rules.
 
@@ -38,9 +67,15 @@ class SelfUpdatePipeline:
     intentionally conservative: without sandbox/test pass the candidate is never promoted.
     """
 
-    def __init__(self, settings: Settings, llm: LlmRouter | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        llm: LlmRouter | None = None,
+        command_runner: SelfUpdateCommandRunner | None = None,
+    ) -> None:
         self.settings = settings
         self.llm = llm or LlmRouter(settings)
+        self.command_runner = command_runner or SelfUpdateCommandRunner()
 
     async def plan(
         self,
@@ -89,13 +124,20 @@ class SelfUpdatePipeline:
             {
                 "mirror": "pass",
                 "prompt_injection_scan": "pass",
-                "sandbox_build": "pass",
-                "contract_tests": "pass",
+                "sandbox_build": "blocked_until_real_checks_enabled",
+                "contract_tests": "blocked_until_real_checks_enabled",
                 "llm_review": "pass" if llm_passed else "needs_human_review",
-                "canary": "ready" if llm_passed else "blocked_until_human_review",
             }
         )
-        status = "canary_ready" if llm_passed else "rejected_to_last_known_good"
+        if self.settings.self_update_checks_enabled:
+            command_results = await self.command_runner.run(DEFAULT_CHECKS)
+            for result in command_results:
+                gates[result.name] = "pass" if result.exit_code == 0 else "fail"
+        checks_passed = gates["sandbox_build"] == "pass" and gates["contract_tests"] == "pass"
+        gates["canary"] = (
+            "ready" if llm_passed and checks_passed else "blocked_until_green_checks"
+        )
+        status = "canary_ready" if llm_passed and checks_passed else "rejected_to_last_known_good"
         return SelfUpdateCandidate(
             source=planned.source,
             current_snapshot=planned.current_snapshot,
@@ -104,6 +146,7 @@ class SelfUpdatePipeline:
             gates=gates,
             notes=(
                 f"LLM review model: {review.model}",
+                "Sandbox and contract tests must be real command results, not assumed pass.",
                 "Rollback points to current snapshot until owner promotes candidate.",
             ),
         )
@@ -120,3 +163,18 @@ def _candidate_name(source: str) -> str:
     now = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     digest = sha256(source.encode("utf-8")).hexdigest()[:12]
     return f"vendor/_snapshots/{now}-{digest}"
+
+
+async def _run_allowed_command(check: CommandCheck) -> CommandResult:
+    if check not in DEFAULT_CHECKS:
+        raise ValueError(f"self-update command is not allowed: {check.name}")
+    root = Path.cwd()
+    process = await asyncio.create_subprocess_exec(
+        *check.argv,
+        cwd=root,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    output_bytes, _ = await asyncio.wait_for(process.communicate(), timeout=180)
+    output = output_bytes.decode("utf-8", errors="replace")[-4_000:]
+    return CommandResult(name=check.name, exit_code=process.returncode or 0, output=output)

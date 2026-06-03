@@ -1,0 +1,98 @@
+{
+  "snapshotDate": "2026-06-03",
+  "policy": "last-known-good operation manifest; runtime imports first-party adapters only",
+  "sources": [
+    {
+      "name": "Ozon Seller API",
+      "url": "https://api-seller.ozon.ru/apiref/en/",
+      "license": "documentation",
+      "runtimeDependency": false
+    },
+    {
+      "name": "Ozon Performance API",
+      "url": "https://docs.ozon.com/global/api/perfomance-api/",
+      "license": "documentation",
+      "runtimeDependency": false
+    },
+    {
+      "name": "Wildberries API",
+      "url": "https://dev.wildberries.ru/en/openapi/api-information",
+      "license": "documentation",
+      "runtimeDependency": false
+    },
+    {
+      "name": "Yandex Market Partner API",
+      "url": "https://yandex.ru/dev/market/partner-api/doc/en/",
+      "license": "documentation",
+      "runtimeDependency": false
+    }
+  ],
+  "operations": [
+    {
+      "operationId": "ProductAPI_GetProductList",
+      "platform": "ozon",
+      "safety": "read",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport"
+    },
+    {
+      "operationId": "ProductAPI_ImportPrices",
+      "platform": "ozon",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run"
+    },
+    {
+      "operationId": "ReviewAPI_SendAnswer",
+      "platform": "ozon",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run"
+    },
+    {
+      "operationId": "Campaign_Stop",
+      "platform": "ozon_performance",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run",
+      "liveBlocker": "requires separate performance credentials"
+    },
+    {
+      "operationId": "WB_Content_GetCardsList",
+      "platform": "wb",
+      "safety": "read",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport"
+    },
+    {
+      "operationId": "WB_Questions_PatchAnswer",
+      "platform": "wb",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run"
+    },
+    {
+      "operationId": "WB_Prices_UploadTask",
+      "platform": "wb",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run"
+    },
+    {
+      "operationId": "YM_GetOfferPrices",
+      "platform": "yandex_market",
+      "safety": "read",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport"
+    },
+    {
+      "operationId": "YM_UpdateCampaignBids",
+      "platform": "yandex_market",
+      "safety": "write",
+      "adapter": "operator_day.connectors.transport.MarketplaceTransport",
+      "defaultMode": "dry_run"
+    }
+  ],
+  "hashes": {
+    "operator_day/connectors/catalog.py": "tracked-by-repository",
+    "operator_day/connectors/transport.py": "tracked-by-repository",
+    "operator_day/connectors/replay.py": "tracked-by-repository"
+  }
+}

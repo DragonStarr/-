@@ -52,3 +52,31 @@ async def test_positive_review_confirmation_uses_llm_fallback() -> None:
     assert result.audit_event["action"] == "review_answer_sent"
     assert result.audit_event["llm_model"] == "offline-template"
     assert result.audit_event["connector_status"] == "accepted"
+    assert result.audit_event["marketplace_operation"]["status"] == "planned"
+    assert result.audit_event["marketplace_operation"]["planned_operation"]["dryRun"] is True
+
+
+async def test_ads_confirmation_builds_marketplace_bid_plan() -> None:
+    ctx = TenantContext(tenant_id="t1", user_id="u1", role=Role.OWNER)
+    orchestrator = MorningOrchestrator()
+    tasks = await orchestrator.collect_all(ctx)
+    task = next(item for item in tasks if item.module_id == ModuleId.ADS)
+
+    result = await orchestrator.execute_prepared(ctx, task)
+
+    assert result.audit_event["action"] == "ads_bid_update_planned"
+    assert result.audit_event["operation_id"] == "YM_UpdateCampaignBids"
+    assert result.audit_event["marketplace_operation"]["planned_operation"]["safety"] == "write"
+
+
+async def test_reprice_confirmation_builds_marketplace_price_plan() -> None:
+    ctx = TenantContext(tenant_id="t1", user_id="u1", role=Role.OWNER)
+    orchestrator = MorningOrchestrator()
+    tasks = await orchestrator.collect_all(ctx)
+    task = next(item for item in tasks if item.module_id == ModuleId.REPRICER)
+
+    result = await orchestrator.execute_prepared(ctx, task)
+
+    assert result.audit_event["action"] == "price_update_planned"
+    assert result.audit_event["target_price"] >= task.payload["hard_floor"]
+    assert result.audit_event["marketplace_operation"]["planned_operation"]["dryRun"] is True

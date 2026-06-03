@@ -19,6 +19,7 @@ What is included now:
 - Next.js 16 Mini App/PWA with Telegram-style bottom navigation, plain Russian labels, lime/M-stripe visual language and API rewrites to the backend.
 - Celery morning collection task with retry/backoff and saved ranked tasks.
 - Marketplace transport layer with operation catalog, platform host routing, path parameters, safe dry-run, safety gates, retry on 429/5xx and Ozon last_id pagination.
+- Local vendored marketplace SDK payload builders in `vendor/marketplace_sdk`, so review, price and bid write plans do not depend on GitHub repositories at runtime.
 - Catalog sync endpoint and Celery task for Ozon/WB/Yandex Market; secrets are decrypted only inside the service and never returned.
 - Synced catalog rows are saved to `products`; API and Telegram morning tasks prefer tenant DB data over replay fixtures.
 - Manual catalog import endpoint for pilot sellers when a marketplace API is unavailable or a test account needs seed products.

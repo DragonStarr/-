@@ -13,5 +13,10 @@ Runtime must not depend on live upstream repositories. Useful external code is c
 
 ## Current Snapshot
 
-The current repository keeps first-party adapters and empty snapshot markers only. Real third-party
-copies are added component by component when a license-safe implementation is selected.
+The current repository keeps first-party adapters in `operator_day/connectors/`, local
+payload builders in `vendor/marketplace_sdk/` and a last-known-good operation manifest in
+`vendor/_snapshots/current/marketplace_operations.manifest.json`.
+
+That means runtime does not fetch SDK code from GitHub. External repositories and official docs are
+used as update inputs only. A future third-party SDK copy may be added here only after license review,
+hash recording, adapter wrapping and green self-update gates.

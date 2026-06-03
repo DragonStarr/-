@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     embedding_vector_size: int = 1024
     miniapp_public_url: str = "http://localhost:5173"
     enable_metrics: bool = True
+    marketplace_write_mode: str = "dry_run"
+    self_update_checks_enabled: bool = False
 
     def validate_runtime(self) -> None:
+        if self.marketplace_write_mode not in {"dry_run", "live"}:
+            raise ValueError("MARKETPLACE_WRITE_MODE must be dry_run or live")
         if self.app_env.lower() in {"prod", "production"}:
             missing: list[str] = []
             if not self.token_encryption_key:

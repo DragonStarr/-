@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from operator_day.config import get_settings
 from operator_day.connectors.base import ConnectorHealth, MarketplaceClient
+from operator_day.connectors.transport import MarketplaceCredentials, MarketplaceTransport
 from operator_day.db import bind_tenant_scope
 from operator_day.domain import (
     ClaimCandidate,
@@ -18,6 +21,7 @@ from operator_day.domain import (
     TenantContext,
 )
 from operator_day.models import (
+    Account,
     Claim,
     ClaimDeadlinePolicy,
     Product,
@@ -25,6 +29,7 @@ from operator_day.models import (
     PvzPointRecord,
     Review,
 )
+from operator_day.repositories import AccountRepository
 
 
 class ReplayMarketplaceClient(MarketplaceClient):
@@ -163,6 +168,27 @@ class ReplayHub:
             if any(review.review_id == review_id for review in reviews):
                 return await client.send_review_answer(review_id, answer)
         return {"mode": "replay", "review_id": review_id, "status": "not_found"}
+
+    async def execute_marketplace_operation(
+        self,
+        operation_id: str,
+        payload: dict[str, Any],
+        *,
+        platform: Platform,
+    ) -> dict[str, Any]:
+        credentials = MarketplaceCredentials(platform=platform.value, api_key="")
+        planned = await MarketplaceTransport(credentials).call_operation(
+            operation_id,
+            payload,
+            dry_run=True,
+        )
+        return {
+            "mode": "schema_dry_run",
+            "status": "planned",
+            "live": False,
+            "account_id": None,
+            "planned_operation": planned,
+        }
 
 
 class DatabaseReplayHub(ReplayHub):
@@ -304,6 +330,58 @@ class DatabaseReplayHub(ReplayHub):
             "review_id": review_id,
             "status": "prepared",
             "answer": answer,
+        }
+
+    async def execute_marketplace_operation(
+        self,
+        operation_id: str,
+        payload: dict[str, Any],
+        *,
+        platform: Platform,
+    ) -> dict[str, Any]:
+        await bind_tenant_scope(self.session, self.ctx)
+        account = (
+            await self.session.execute(
+                select(Account)
+                .where(Account.tenant_id == self.ctx.tenant_id, Account.platform == platform.value)
+                .order_by(Account.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        live_requested = get_settings().marketplace_write_mode == "live"
+        if account is None:
+            return await super().execute_marketplace_operation(
+                operation_id,
+                payload,
+                platform=platform,
+            )
+        credentials = await AccountRepository(self.session).credentials_for_account(
+            self.ctx,
+            account.id,
+        )
+        transport = MarketplaceTransport(credentials)
+        operation = transport.operations[operation_id]
+        compatible_live_platforms = {platform.value}
+        if platform == Platform.YANDEX:
+            compatible_live_platforms.add("yandex_market")
+        live_allowed = (
+            live_requested
+            and account.status == "validated"
+            and operation.platform in compatible_live_platforms
+        )
+        transport_result = await transport.call_operation(
+            operation_id,
+            payload,
+            confirm_write=live_allowed,
+            dry_run=not live_allowed,
+        )
+        return {
+            "mode": "live" if live_allowed else "tenant_dry_run",
+            "status": "executed" if live_allowed else "planned",
+            "live": live_allowed,
+            "account_id": account.id,
+            "planned_operation": None if live_allowed else transport_result,
+            "response": transport_result if live_allowed else None,
         }
 
 

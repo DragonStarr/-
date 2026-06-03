@@ -5,15 +5,41 @@ from datetime import UTC, datetime, timedelta
 
 from operator_day.brain.llm import LlmRouter
 from operator_day.brain.review_writer import ReviewDraftService
+from operator_day.calculations import (
+    ad_bid_plan,
+    ad_savings_effect,
+    confidence_from_inputs,
+    forecast_money_effect,
+    listing_quality_score,
+    reorder_quantity,
+    reprice_money_effect,
+    reprice_plan,
+    unit_math,
+    warehouse_distribution,
+)
 from operator_day.config import get_settings
 from operator_day.connectors.replay import ReplayHub
-from operator_day.domain import ActionResult, ActionRisk, ModuleId, TaskAction, TenantContext
+from operator_day.domain import (
+    ActionResult,
+    ActionRisk,
+    ModuleId,
+    Platform,
+    TaskAction,
+    TenantContext,
+)
 from operator_day.modules.base import OperatorModule
 from operator_day.pvz.shifts import (
     build_two_two_schedule,
     calculate_payroll_by_rate,
 )
 from operator_day.skills_catalog import enrich_action_payload
+from vendor.marketplace_sdk import (
+    ozon_price_import,
+    ozon_review_answer,
+    wb_price_upload,
+    wb_question_answer,
+    yandex_market_bid_update,
+)
 
 
 def _action(
@@ -62,18 +88,23 @@ class UnitEconomicsModule(OperatorModule):
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
         actions = []
         for product in await replay.products():
-            margin = product.price * (1 - product.commission_rate) - product.cost
-            if margin < 120:
+            math = unit_math(product)
+            if math.gross_margin < 120:
                 actions.append(
                     _action(
                         self.module_id,
                         "Товар близко к минусу",
-                        f"{product.name}: маржа около {margin:.0f} ₽. Подготовить новую цену?",
+                        (
+                            f"{product.name}: маржа около {math.gross_margin:.0f} ₽. "
+                            "Подготовить новую цену?"
+                        ),
                         "Показать расчет",
                         92,
                         ActionRisk.CONFIRM,
                         sku=product.sku,
-                        margin=margin,
+                        margin=math.gross_margin,
+                        margin_rate=math.margin_rate,
+                        break_even_price=math.break_even_price,
                     )
                 )
         return actions
@@ -98,7 +129,7 @@ class SeoModule(OperatorModule):
                 confidence=0.65,
                 sku=product.sku,
                 reverse_keywords=["органайзер кухня", "хранение специй"],
-                listing_score=67,
+                listing_score=listing_quality_score(product),
             )
         ]
 
@@ -109,6 +140,13 @@ class SuppliesModule(OperatorModule):
 
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
         low_stock = [p for p in await replay.products() if p.stock <= 4]
+        reorder_rows = [
+            {"sku": product.sku, "quantity": reorder_quantity(product)}
+            for product in low_stock
+        ]
+        money_effect = sum(
+            forecast_money_effect(product, reorder_quantity(product)) for product in low_stock
+        )
         return (
             [
                 _action(
@@ -118,7 +156,9 @@ class SuppliesModule(OperatorModule):
                     "Собрать поставку",
                     78,
                     ActionRisk.CONFIRM,
+                    money_effect=money_effect,
                     skus=[p.sku for p in low_stock],
+                    reorder=reorder_rows,
                 )
             ]
             if low_stock
@@ -146,6 +186,8 @@ class ReviewsModule(OperatorModule):
                         urgency=0.8,
                         confidence=0.8,
                         review_id=review.review_id,
+                        platform=review.platform.value,
+                        sku=review.sku,
                         rating=review.rating,
                         aspect_candidates=["протекает", "возврат"],
                     )
@@ -163,7 +205,10 @@ class ReviewsModule(OperatorModule):
                         urgency=0.4,
                         confidence=0.78,
                         review_id=review.review_id,
+                        platform=review.platform.value,
+                        sku=review.sku,
                         rating=review.rating,
+                        buyer_question=review.buyer_question or "",
                         aspect_candidates=["удобно", "быстрая доставка"],
                     )
                 )
@@ -191,10 +236,19 @@ class ReviewsModule(OperatorModule):
         review = next(item for item in await replay.reviews() if item.review_id == review_id)
         draft = await ReviewDraftService(LlmRouter(get_settings())).draft_positive_answer(review)
         send_result = await replay.send_review_answer(review_id, draft.answer)
+        operation_id, operation_payload = _review_answer_operation(review, draft.answer)
+        operation_result = await replay.execute_marketplace_operation(
+            operation_id,
+            operation_payload,
+            platform=review.platform,
+        )
         return ActionResult(
             task_id=task.task_id,
             status=task.status,
-            user_text="Готово. Ответ на отзыв подготовлен и записан.",
+            user_text=(
+                "Готово. Ответ на отзыв подготовлен, записан "
+                "и собран в безопасный план отправки."
+            ),
             audit_event={
                 "tenant_id": ctx.tenant_id,
                 "user_id": ctx.user_id,
@@ -206,8 +260,16 @@ class ReviewsModule(OperatorModule):
                 "llm_used_fallback": draft.used_fallback,
                 "llm_tokens_estimate": draft.tokens_estimate,
                 "connector_status": send_result["status"],
+                "operation_id": operation_id,
+                "marketplace_operation": operation_result,
             },
         )
+
+
+def _review_answer_operation(review, answer: str) -> tuple[str, dict[str, object]]:
+    if review.platform == Platform.WB:
+        return wb_question_answer(question_id=review.review_id, text=answer)
+    return ozon_review_answer(review_id=review.review_id, text=answer)
 
 
 class CompetitorsModule(OperatorModule):
@@ -236,7 +298,12 @@ class RepricerModule(OperatorModule):
     title = "Репрайс"
 
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
-        product = min(await replay.products(), key=lambda p: p.stock)
+        products = await replay.products()
+        product = next(
+            (item for item in products if item.platform == Platform.OZON),
+            min(products, key=lambda item: item.stock),
+        )
+        plan = reprice_plan(product, competitor_price=product.price * 0.97)
         return [
             _action(
                 self.module_id,
@@ -245,14 +312,60 @@ class RepricerModule(OperatorModule):
                 "Проверить цену",
                 65,
                 ActionRisk.CONFIRM,
-                money_effect=1200,
+                money_effect=reprice_money_effect(product, plan),
                 urgency=0.5,
                 confidence=0.62,
                 sku=product.sku,
-                hard_floor=product.cost * 1.35,
+                platform=Platform.YANDEX.value,
+                current_price=plan.current_price,
+                target_price=plan.target_price,
+                hard_floor=plan.floor_price,
+                expected_margin=plan.expected_margin,
                 game_theory_mode="hold_margin",
             )
         ]
+
+    async def execute(
+        self, ctx: TenantContext, task: TaskAction, replay: ReplayHub
+    ) -> ActionResult:
+        platform = Platform(str(task.payload.get("platform") or Platform.OZON.value))
+        operation_id, payload = _price_update_operation(
+            platform,
+            sku=str(task.payload.get("sku") or ""),
+            price=float(task.payload.get("target_price") or 0),
+        )
+        operation_result = await replay.execute_marketplace_operation(
+            operation_id,
+            payload,
+            platform=platform,
+        )
+        return ActionResult(
+            task_id=task.task_id,
+            status=task.status,
+            user_text="Готово. Новая цена собрана в безопасный план и ждёт live-режима кабинета.",
+            audit_event={
+                "tenant_id": ctx.tenant_id,
+                "user_id": ctx.user_id,
+                "module": self.module_id.value,
+                "task_id": task.task_id,
+                "action": "price_update_planned",
+                "operation_id": operation_id,
+                "sku": task.payload.get("sku"),
+                "target_price": task.payload.get("target_price"),
+                "marketplace_operation": operation_result,
+            },
+        )
+
+
+def _price_update_operation(
+    platform: Platform,
+    *,
+    sku: str,
+    price: float,
+) -> tuple[str, dict[str, object]]:
+    if platform == Platform.WB:
+        return wb_price_upload(vendor_code=sku, price=price)
+    return ozon_price_import(offer_id=sku, price=price)
 
 
 class FinanceModule(OperatorModule):
@@ -301,20 +414,22 @@ class ForecastModule(OperatorModule):
 
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
         product = min(await replay.products(), key=lambda p: p.stock)
+        quantity = reorder_quantity(product)
+        distribution = warehouse_distribution(quantity, localization_index=0.72)
         return [
             _action(
                 self.module_id,
                 "Пора пополнить",
-                f"{product.name}: остатка мало. Заказать 40 шт?",
+                f"{product.name}: остатка мало. Заказать {quantity} шт?",
                 "Собрать",
                 80,
                 ActionRisk.CONFIRM,
-                money_effect=3600,
+                money_effect=forecast_money_effect(product, quantity),
                 urgency=0.75,
                 confidence=0.72,
                 sku=product.sku,
-                quantity=40,
-                warehouse_distribution={"Коледино": 24, "Казань": 10, "Краснодар": 6},
+                quantity=quantity,
+                warehouse_distribution=distribution,
             )
         ]
 
@@ -480,7 +595,14 @@ class AdsModule(OperatorModule):
     title = "Реклама"
 
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
-        product = (await replay.products())[0]
+        products = await replay.products()
+        product = next((item for item in products if item.platform == Platform.YANDEX), products[0])
+        bid = ad_bid_plan(
+            product,
+            bid_before=120,
+            target_drr=0.18,
+            localization_index=0.74,
+        )
         return [
             _action(
                 self.module_id,
@@ -489,17 +611,71 @@ class AdsModule(OperatorModule):
                 "Проверить ставку",
                 84,
                 ActionRisk.CONFIRM,
-                money_effect=1800,
+                money_effect=ad_savings_effect(bid),
                 urgency=0.8,
                 confidence=0.58,
                 sku=product.sku,
                 platform=product.platform.value,
                 target_drr=0.18,
-                bid_before=120,
-                bid_after=92,
+                bid_before=bid.bid_before,
+                bid_after=bid.bid_after,
+                expected_drr=bid.expected_drr,
+                conversion_probability=bid.conversion_probability,
+                localization_index=bid.localization_index,
+                campaign_id="dry-run-campaign",
                 needs_api_verification=True,
             )
         ]
+
+    async def execute(
+        self, ctx: TenantContext, task: TaskAction, replay: ReplayHub
+    ) -> ActionResult:
+        platform = Platform(str(task.payload.get("platform") or Platform.YANDEX.value))
+        operation_id, payload = _ads_bid_operation(
+            platform,
+            sku=str(task.payload.get("sku") or ""),
+            bid=int(task.payload.get("bid_after") or 0),
+            campaign_id=str(task.payload.get("campaign_id") or "dry-run-campaign"),
+        )
+        operation_result = await replay.execute_marketplace_operation(
+            operation_id,
+            payload,
+            platform=platform,
+        )
+        return ActionResult(
+            task_id=task.task_id,
+            status=task.status,
+            user_text="Готово. Ставка собрана в безопасный план обновления через кабинет.",
+            audit_event={
+                "tenant_id": ctx.tenant_id,
+                "user_id": ctx.user_id,
+                "module": self.module_id.value,
+                "task_id": task.task_id,
+                "action": "ads_bid_update_planned",
+                "operation_id": operation_id,
+                "sku": task.payload.get("sku"),
+                "bid_before": task.payload.get("bid_before"),
+                "bid_after": task.payload.get("bid_after"),
+                "expected_drr": task.payload.get("expected_drr"),
+                "marketplace_operation": operation_result,
+            },
+        )
+
+
+def _ads_bid_operation(
+    platform: Platform,
+    *,
+    sku: str,
+    bid: int,
+    campaign_id: str,
+) -> tuple[str, dict[str, object]]:
+    if platform != Platform.YANDEX:
+        platform = Platform.YANDEX
+    return yandex_market_bid_update(
+        campaign_id=campaign_id,
+        offer_id=sku,
+        bid=bid,
+    )
 
 
 class ClaimsModule(OperatorModule):
@@ -542,7 +718,10 @@ class ClaimsModule(OperatorModule):
                     ActionRisk.HUMAN,
                     money_effect=candidate.amount,
                     urgency=0.95 if task_deadline_is_near(deadline_at) else 0.75,
-                    confidence=0.74 if policy else 0.55,
+                    confidence=confidence_from_inputs(
+                        source_count=len(evidence),
+                        has_verified_policy=policy is not None,
+                    ),
                     deadline_at=deadline_at,
                     platform=candidate.platform.value,
                     sku=candidate.sku,
@@ -626,10 +805,39 @@ class AccountGuardModule(OperatorModule):
                 urgency=1.0,
                 confidence=0.62,
                 deadline_at=datetime.now(UTC) + timedelta(hours=4),
+                platform=Platform.OZON.value,
+                campaign_id="dry-run-campaign",
                 risk_type="click_fraud",
                 whitehat_only=True,
             )
         ]
+
+    async def execute(
+        self, ctx: TenantContext, task: TaskAction, replay: ReplayHub
+    ) -> ActionResult:
+        operation_result = await replay.execute_marketplace_operation(
+            "Campaign_Stop",
+            {"campaign_id": str(task.payload.get("campaign_id") or "dry-run-campaign")},
+            platform=Platform.OZON,
+        )
+        return ActionResult(
+            task_id=task.task_id,
+            status=task.status,
+            user_text=(
+                "Готово. Остановка кампании собрана в безопасный план, "
+                "live-запись ждёт проверенный рекламный кабинет."
+            ),
+            audit_event={
+                "tenant_id": ctx.tenant_id,
+                "user_id": ctx.user_id,
+                "module": self.module_id.value,
+                "task_id": task.task_id,
+                "action": "campaign_stop_planned",
+                "operation_id": "Campaign_Stop",
+                "risk_type": task.payload.get("risk_type"),
+                "marketplace_operation": operation_result,
+            },
+        )
 
 
 @dataclass(frozen=True)

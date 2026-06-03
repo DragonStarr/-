@@ -55,4 +55,5 @@
 - Ozon Performance API official help says the old `performance.ozon.ru` host stopped working from 2025-01-15 and API work moved to `api-performance.ozon.ru`; account-level request limits and exact methods must still be checked from seller access before enabling live ad writes.
 - Yandex Market Partner API exposes bidding flows and campaign bid info; the documented bid-info page notes access scopes and current/legacy limits, so ЯМ ads actions should validate campaign access and scope before write.
 - `PCDCK/ozon-mcp` and `Jerardx/wildberries-mcp-server` independently support the same connector pattern: operation catalog, dry-run/read-write safety, rate-limit metadata, retry/429 handling and large-response discipline.
+- Runtime now uses local vendored payload builders in `vendor/marketplace_sdk/`; GitHub repositories and official docs are update inputs only, not runtime dependencies.
 - Claim deadlines from the notebook must stay configurable and source-linked (`claim_deadlines`) until official WB/Ozon/YM rules are verified.

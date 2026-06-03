@@ -3,7 +3,7 @@ from httpx import ASGITransport, AsyncClient
 from operator_day.brain.llm import LlmResponse
 from operator_day.config import Settings
 from operator_day.main import create_app
-from operator_day.selfupdate.pipeline import SelfUpdatePipeline
+from operator_day.selfupdate.pipeline import CommandResult, SelfUpdatePipeline
 
 
 async def test_plugin_manifest_install_and_rejects_unknown_action() -> None:
@@ -65,7 +65,40 @@ async def test_self_update_dry_gate_stays_on_last_known_good_without_clean_llm()
 
     assert candidate.status == "rejected_to_last_known_good"
     assert candidate.gates["llm_review"] == "needs_human_review"
+    assert candidate.gates["sandbox_build"] == "blocked_until_real_checks_enabled"
     assert candidate.gates["rollback"] == "ready_last_known_good"
+
+
+async def test_self_update_canary_requires_real_green_command_results() -> None:
+    class FakePassLlm:
+        async def complete_json_safe(self, prompt: str, *, max_tokens: int = 500):
+            return LlmResponse(
+                text="verdict=pass",
+                model="architect-live",
+                used_fallback=False,
+                tokens_estimate=12,
+            )
+
+    class FakeCommandRunner:
+        async def run(self, checks):
+            return tuple(
+                CommandResult(name=check.name, exit_code=0, output="ok") for check in checks
+            )
+
+    pipeline = SelfUpdatePipeline(
+        Settings(self_update_checks_enabled=True),
+        llm=FakePassLlm(),  # type: ignore[arg-type]
+        command_runner=FakeCommandRunner(),  # type: ignore[arg-type]
+    )
+    candidate = await pipeline.run_dry_gate(
+        source="https://github.com/example/upstream",
+        diff_text="regular patch",
+    )
+
+    assert candidate.status == "canary_ready"
+    assert candidate.gates["sandbox_build"] == "pass"
+    assert candidate.gates["contract_tests"] == "pass"
+    assert candidate.gates["canary"] == "ready"
 
 
 async def test_metrics_endpoint_exposes_core_readiness_numbers() -> None:

@@ -192,8 +192,17 @@ function TaskList({ tasks, onConfirm }: { tasks: Task[]; onConfirm: (task: Task)
     <div className="stack">
       {rows.map((task, index) => (
         <article className="task-row" key={task.taskId}>
-          <div className="emoji" style={{ animationDelay: `${index * 90}ms` }}>
-            {task.status === "done" ? "✅" : task.risk === "safe" ? "🟢" : "⚡"}
+          <div
+            className={`task-icon ${task.status === "done" ? "done" : task.risk}`}
+            style={{ animationDelay: `${index * 90}ms` }}
+          >
+            {task.status === "done" ? (
+              <Check size={20} />
+            ) : task.risk === "safe" ? (
+              <ShieldCheck size={20} />
+            ) : (
+              <Sparkles size={20} />
+            )}
           </div>
           <div className="task-body">
             <div className="row-head">
