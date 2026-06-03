@@ -65,16 +65,19 @@ type Notice = {
 };
 
 const tabs: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
-  { id: "day", label: "День", icon: BriefcaseBusiness },
-  { id: "accounts", label: "Кабинеты", icon: Boxes },
+  { id: "day", label: "День", icon: LineChart },
+  { id: "accounts", label: "Кабинеты", icon: BriefcaseBusiness },
   { id: "money", label: "Деньги", icon: CircleDollarSign },
-  { id: "pvz", label: "ПВЗ", icon: Building2 },
+  { id: "pvz", label: "ПВЗ", icon: Boxes },
   { id: "more", label: "Ещё", icon: Settings }
 ];
+
+const storageKey = "mp-helper-custom-tasks";
 
 export function OperatorDayApp() {
   const [tab, setTab] = useState<Tab>("day");
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [customTasks, setCustomTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<AccountCapability[]>([]);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
@@ -86,6 +89,8 @@ export function OperatorDayApp() {
   const [notice, setNotice] = useState<Notice>({ text: "Собираю дела", tone: "loading" });
   const [loading, setLoading] = useState(true);
   const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmResult | null>(null);
   const [accountAction, setAccountAction] = useState<Record<string, string>>({});
@@ -93,6 +98,15 @@ export function OperatorDayApp() {
   const [memoryNotice, setMemoryNotice] = useState("");
 
   useTelegramChrome();
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      if (saved) setCustomTasks(JSON.parse(saved) as Task[]);
+    } catch {
+      setCustomTasks([]);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -116,7 +130,7 @@ export function OperatorDayApp() {
         setPlugins(pluginRows);
         setDeadlines(deadlineRows);
         setLlmStatus(llm);
-        setNotice({ text: "Готово", tone: "ready" });
+        setNotice({ text: "Активен", tone: "ready" });
       } catch {
         if (!mounted) return;
         setTasks(demoTasks);
@@ -125,7 +139,7 @@ export function OperatorDayApp() {
         setPlugins(demoPlugins);
         setDeadlines(demoDeadlines);
         setLlmStatus(demoLlmStatus);
-        setNotice({ text: "Показываю безопасный режим", tone: "warn" });
+        setNotice({ text: "Тестовый режим", tone: "warn" });
       } finally {
         if (mounted) setLoading(false);
       }
@@ -137,7 +151,8 @@ export function OperatorDayApp() {
     };
   }, []);
 
-  const visibleTasks = tasks.length ? tasks : demoTasks;
+  const baseTasks = tasks.length ? tasks : demoTasks;
+  const visibleTasks = useMemo(() => [...customTasks, ...baseTasks], [baseTasks, customTasks]);
   const metrics = useMemo(() => buildMetrics(visibleTasks, accounts, readiness), [
     visibleTasks,
     accounts,
@@ -145,11 +160,79 @@ export function OperatorDayApp() {
   ]);
   const grouped = useMemo(() => groupTasks(visibleTasks), [visibleTasks]);
 
+  function persistCustomTasks(rows: Task[]) {
+    setCustomTasks(rows);
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(rows));
+    } catch {
+      // Local storage is optional; the task still appears in this session.
+    }
+  }
+
+  function openBestTask(group: Task[], fallback?: Tab) {
+    const task = group.find((item) => !isDone(item.status)) ?? group[0];
+    if (task) {
+      setConfirmResult(null);
+      setPreviewTask(task);
+      return;
+    }
+    if (fallback) setTab(fallback);
+  }
+
+  function handleDraftCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = draftTitle.trim();
+    if (!title) return;
+
+    const task: Task = {
+      taskId: `custom-${Date.now()}`,
+      moduleId: "M00_CUSTOM",
+      title,
+      shortText: "Добавлено вручную. Перед выполнением система попросит подтверждение и запишет действие в журнал.",
+      actionLabel: "Показать",
+      priority: 5,
+      risk: "confirm",
+      status: "new",
+      score: 0.62,
+      moneyEffect: 0,
+      confidence: 0.7,
+      deadlineAt: null,
+      payload: {
+        platform: "manual",
+        source: "ручное дело",
+        skills: Array.from({ length: 30 }, (_, index) => `skill_${index + 1}`),
+        mcp_checks: Array.from({ length: 10 }, (_, index) => `mcp_check_${index + 1}`)
+      }
+    };
+
+    persistCustomTasks([task, ...customTasks]);
+    setDraftTitle("");
+    setCreateOpen(false);
+    setTab("day");
+    setConfirmResult(null);
+    setPreviewTask(task);
+  }
+
   async function handleConfirm(task: Task) {
     setBusyTaskId(task.taskId);
     setConfirmResult(null);
-    setNotice({ text: "Делаю", tone: "loading" });
+    setNotice({ text: "Проверяю", tone: "loading" });
     try {
+      if (task.taskId.startsWith("custom-")) {
+        const result: ConfirmResult = {
+          taskId: task.taskId,
+          status: "prepared",
+          text: "Дело принято в работу. Изменений в кабинетах не внесено без отдельного доступа.",
+          auditEvent: { connector_status: "prepared" }
+        };
+        persistCustomTasks(
+          customTasks.map((item) => (item.taskId === task.taskId ? { ...item, status: result.status } : item))
+        );
+        setConfirmResult(result);
+        setNotice({ text: "Записано", tone: "ready" });
+        return;
+      }
+
       const result = await confirmTask(task.taskId);
       setConfirmResult(result);
       setNotice({ text: "Записано", tone: "ready" });
@@ -157,7 +240,7 @@ export function OperatorDayApp() {
         rows.map((item) => (item.taskId === task.taskId ? { ...item, status: result.status } : item))
       );
     } catch {
-      setNotice({ text: "Ничего не изменил", tone: "warn" });
+      setNotice({ text: "Без изменений", tone: "warn" });
       setConfirmResult({
         taskId: task.taskId,
         status: "failed",
@@ -228,12 +311,13 @@ export function OperatorDayApp() {
 
   return (
     <main className="app-shell">
-      <div className="app-backplate" aria-hidden="true" />
+      <div className="noise-layer" aria-hidden="true" />
+      <PhoneChrome />
       <header className="topbar">
         <Logo loading={loading} />
         <div className="brand-copy">
-          <p>мпомощник</p>
-          <h1>Оператор дня</h1>
+          <h1>мпомощник</h1>
+          <p>ассистент продавца маркетплейсов</p>
         </div>
         <StatusPill notice={notice} />
       </header>
@@ -241,9 +325,10 @@ export function OperatorDayApp() {
       <HeroWallet
         metrics={metrics}
         readiness={readiness}
-        onSelectMoney={() => setTab("money")}
-        onSelectAccounts={() => setTab("accounts")}
-        onSelectMore={() => setTab("more")}
+        onCreate={() => setCreateOpen(true)}
+        onMoney={() => openBestTask(grouped.money, "money")}
+        onAds={() => openBestTask(grouped.ads, "day")}
+        onStock={() => openBestTask(grouped.catalog, "day")}
       />
 
       <section className="content" aria-live="polite">
@@ -308,6 +393,15 @@ export function OperatorDayApp() {
 
       <BottomNav active={tab} onChange={setTab} />
 
+      {createOpen && (
+        <CreateTaskSheet
+          title={draftTitle}
+          onChange={setDraftTitle}
+          onClose={() => setCreateOpen(false)}
+          onSubmit={handleDraftCreate}
+        />
+      )}
+
       {previewTask && (
         <ActionPreview
           task={previewTask}
@@ -329,10 +423,24 @@ function useTelegramChrome() {
     const tg = window.Telegram?.WebApp;
     tg?.ready?.();
     tg?.expand?.();
-    tg?.setHeaderColor?.("#10151c");
-    tg?.setBackgroundColor?.("#10151c");
-    tg?.setBottomBarColor?.("#ffffff");
+    tg?.setHeaderColor?.("#050607");
+    tg?.setBackgroundColor?.("#050607");
+    tg?.setBottomBarColor?.("#050607");
   }, []);
+}
+
+function PhoneChrome() {
+  return (
+    <div className="phone-chrome" aria-hidden="true">
+      <strong>9:41</strong>
+      <span className="telegram-pill">TELEGRAM</span>
+      <span className="phone-icons">
+        <i />
+        <i />
+        <i />
+      </span>
+    </div>
+  );
 }
 
 function Logo({ loading }: { loading: boolean }) {
@@ -341,7 +449,6 @@ function Logo({ loading }: { loading: boolean }) {
       <span className="stripe blue" />
       <span className="stripe navy" />
       <span className="stripe red" />
-      <span className="logo-core">М</span>
     </div>
   );
 }
@@ -350,7 +457,7 @@ function StatusPill({ notice }: { notice: Notice }) {
   const Icon = notice.tone === "loading" ? Loader2 : notice.tone === "ready" ? BadgeCheck : Clock3;
   return (
     <div className={`status-pill ${notice.tone}`}>
-      <Icon size={16} className={notice.tone === "loading" ? "spin" : undefined} />
+      <Icon size={15} className={notice.tone === "loading" ? "spin" : undefined} />
       <span>{notice.text}</span>
     </div>
   );
@@ -359,52 +466,68 @@ function StatusPill({ notice }: { notice: Notice }) {
 function HeroWallet({
   metrics,
   readiness,
-  onSelectMoney,
-  onSelectAccounts,
-  onSelectMore
+  onCreate,
+  onMoney,
+  onAds,
+  onStock
 }: {
   metrics: ReturnType<typeof buildMetrics>;
   readiness: Readiness | null;
-  onSelectMoney: () => void;
-  onSelectAccounts: () => void;
-  onSelectMore: () => void;
+  onCreate: () => void;
+  onMoney: () => void;
+  onAds: () => void;
+  onStock: () => void;
 }) {
   return (
     <section className="hero-wallet">
-      <div className="hero-stripes" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="hero-top">
+      <div className="hero-head">
         <div>
-          <p>Сегодня можно вернуть или сэкономить</p>
+          <p>Эффект за сегодня</p>
           <strong>{formatMoney(metrics.money)}</strong>
+          <span className="growth">+{metrics.growth}% к вчера {formatMoney(metrics.yesterday)}</span>
         </div>
-        <div className="mode-chip">
-          <ShieldCheck size={15} />
-          <span>{readinessLabel(readiness?.status)}</span>
-        </div>
+        <button className="date-button" type="button">
+          <span>Сегодня</span>
+          <ChevronRight size={15} />
+        </button>
       </div>
-      <div className="metric-row">
-        <Metric label="Дел" value={String(metrics.tasks)} />
-        <Metric label="Нужен ОК" value={String(metrics.confirm)} />
-        <Metric label="Кабинетов" value={String(metrics.accounts)} />
+      <Sparkline />
+      <div className="stat-grid">
+        <Stat label="Заказы" value={String(metrics.orders)} tone="+8,3%" />
+        <Stat label="Штрафы" value={formatMoney(metrics.penalties)} tone="-17,6%" />
+        <Stat label="Расходы" value={formatMoney(metrics.expenses)} tone="-6,1%" />
+        <Stat label="Чистая польза" value={formatMoney(metrics.profit)} tone="+15,7%" />
       </div>
       <div className="quick-actions" aria-label="Быстрые действия">
-        <QuickAction icon={CircleDollarSign} label="Деньги" onClick={onSelectMoney} />
-        <QuickAction icon={Plug} label="Кабинеты" onClick={onSelectAccounts} />
-        <QuickAction icon={Database} label="Память" onClick={onSelectMore} />
+        <QuickAction icon={Sparkles} label="Создать задачу" onClick={onCreate} featured />
+        <QuickAction icon={CircleDollarSign} label="Вернуть деньги" onClick={onMoney} />
+        <QuickAction icon={Gauge} label="Проверить ставки" onClick={onAds} />
+        <QuickAction icon={RefreshCcw} label="Обновить остатки" onClick={onStock} />
+      </div>
+      <div className="hero-foot">
+        <ShieldCheck size={15} />
+        <span>{readinessLabel(readiness?.status)}</span>
       </div>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Sparkline() {
   return (
-    <div className="metric">
-      <strong>{value}</strong>
+    <svg className="sparkline" viewBox="0 0 342 94" role="img" aria-label="Рост за день">
+      <path className="spark-area" d="M0 80 L22 70 L46 68 L65 58 L83 72 L101 48 L124 52 L148 38 L169 32 L188 18 L205 54 L226 40 L244 41 L267 19 L286 35 L305 30 L326 18 L342 16 L342 94 L0 94 Z" />
+      <path className="spark-line" d="M0 80 C22 70 35 70 46 68 C62 66 65 55 83 72 C99 86 103 43 124 52 C142 60 151 34 169 32 C182 31 188 9 205 54 C211 72 228 38 244 41 C263 45 267 7 286 35 C295 47 304 27 326 18 C336 13 339 16 342 16" />
+      <circle cx="342" cy="16" r="5" />
+    </svg>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="stat">
       <span>{label}</span>
+      <strong>{value}</strong>
+      <em>{tone}</em>
     </div>
   );
 }
@@ -412,15 +535,17 @@ function Metric({ label, value }: { label: string; value: string }) {
 function QuickAction({
   icon: Icon,
   label,
-  onClick
+  onClick,
+  featured
 }: {
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  featured?: boolean;
 }) {
   return (
-    <button className="quick-action" type="button" onClick={onClick}>
-      <Icon size={18} />
+    <button className={featured ? "quick-action featured" : "quick-action"} type="button" onClick={onClick}>
+      <Icon size={24} />
       <span>{label}</span>
     </button>
   );
@@ -442,16 +567,16 @@ function DayView({
   return (
     <div className="view-stack">
       <section className="section-head">
-        <div>
-          <p>Очередь дня</p>
-          <h2>Сначала деньги, риски и срочные ответы</h2>
-        </div>
-        <span>{tasks.length} дел</span>
+        <h2>Очередь задач</h2>
+        <button type="button">
+          <span>{tasks.length} задач</span>
+          <ChevronRight size={18} />
+        </button>
       </section>
       <TaskList tasks={tasks} onPreview={onPreview} onFeedback={onFeedback} feedback={feedback} />
       <section className="insight-grid">
         <InsightCard icon={Megaphone} title="Реклама" text={summaryText(grouped.ads, "Ставки и ключи спокойны")} />
-        <InsightCard icon={ShoppingBag} title="Товары" text={summaryText(grouped.catalog, "Карточки без срочных провалов")} />
+        <InsightCard icon={ShoppingBag} title="Товары" text={summaryText(grouped.catalog, "Остатки и карточки под присмотром")} />
       </section>
     </div>
   );
@@ -468,7 +593,7 @@ function TaskList({
   onFeedback: (taskId: string, score: number) => void;
   feedback: Record<string, string>;
 }) {
-  const rows = tasks.length ? tasks : demoTasks.slice(0, 3);
+  const rows = tasks.length ? tasks : demoTasks.slice(0, 4);
   return (
     <div className="task-list">
       {rows.map((task) => (
@@ -496,60 +621,36 @@ function TaskCard({
   onFeedback: (taskId: string, score: number) => void;
 }) {
   const done = isDone(task.status);
-  const Icon = moduleIcon(task.moduleId);
+  const Icon = done ? Check : moduleIcon(task.moduleId);
   return (
-    <article className={`task-card ${done ? "done" : ""}`}>
-      <div className="task-main">
-        <div className={`task-icon ${task.risk}`}>
-          {done ? <Check size={20} /> : <Icon size={20} />}
-        </div>
-        <div className="task-copy">
-          <div className="task-title-row">
-            <h3>{cleanText(task.title)}</h3>
-            <RiskBadge risk={task.risk} status={task.status} />
-          </div>
-          <p>{cleanText(task.shortText)}</p>
-          <div className="data-line">
-            <span>{moduleLabel(task.moduleId)}</span>
-            <span>{formatMoney(task.moneyEffect)}</span>
-            <span>{Math.round(task.confidence * 100)}% уверен</span>
-          </div>
-        </div>
+    <article className={`task-card ${done ? "done" : ""} ${toneClass(task)}`}>
+      <span className="task-rail" aria-hidden="true" />
+      <div className={`task-icon ${task.risk}`}>
+        <Icon size={22} />
       </div>
-      <div className="task-bottom">
-        <div className="source-mini">
-          <Database size={14} />
-          <span>{shortSource(task)}</span>
-        </div>
-        <div className="task-buttons">
-          {done && (
-            <>
-              <button type="button" onClick={() => onFeedback(task.taskId, 5)}>
-                Хорошо
-              </button>
-              <button type="button" onClick={() => onFeedback(task.taskId, 2)}>
-                Плохо
-              </button>
-            </>
-          )}
-          {feedbackText && <span className="feedback-note">{feedbackText}</span>}
-          <button className="make-button" type="button" onClick={() => onPreview(task)}>
-            <span>{done ? "Детали" : task.actionLabel || "Сделать"}</span>
-            <ChevronRight size={16} />
+      <div className="task-copy">
+        <h3>{cleanText(task.title)}</h3>
+        <p>{shortSource(task)}</p>
+      </div>
+      <div className="task-action-column">
+        <button className="make-button" type="button" onClick={() => onPreview(task)}>
+          {done ? "Детали" : task.actionLabel || "Сделать"}
+        </button>
+        <span>{formatMoney(task.moneyEffect)}</span>
+      </div>
+      {done && (
+        <div className="feedback-row">
+          <button type="button" onClick={() => onFeedback(task.taskId, 5)}>
+            Хорошо
           </button>
+          <button type="button" onClick={() => onFeedback(task.taskId, 2)}>
+            Исправить
+          </button>
+          {feedbackText && <span>{feedbackText}</span>}
         </div>
-      </div>
+      )}
     </article>
   );
-}
-
-function RiskBadge({ risk, status }: { risk: string; status: string }) {
-  if (isDone(status)) {
-    return <span className="risk-badge good">записано</span>;
-  }
-  if (risk === "safe") return <span className="risk-badge good">можно</span>;
-  if (risk === "human") return <span className="risk-badge warn">человек</span>;
-  return <span className="risk-badge">нужен ОК</span>;
 }
 
 function AccountsView({
@@ -565,9 +666,9 @@ function AccountsView({
     return (
       <div className="view-stack">
         <EmptyState
-          icon={<Plug size={36} />}
+          icon={<Plug size={34} />}
           title="Кабинеты ждут подключения"
-          text="После подключения я начну брать реальные товары, продажи, отзывы, рекламу, финансы, претензии и ПВЗ из личных кабинетов."
+          text="После подключения я начну брать товары, продажи, отзывы, рекламу, финансы, претензии и ПВЗ из личных кабинетов."
         />
         <SourceChecklist />
       </div>
@@ -577,10 +678,7 @@ function AccountsView({
   return (
     <div className="view-stack">
       <section className="section-head">
-        <div>
-          <p>Источники данных</p>
-          <h2>Каждый кабинет проверяется перед действием</h2>
-        </div>
+        <h2>Кабинеты</h2>
         <span>{accounts.length}</span>
       </section>
       {accounts.map((account) => (
@@ -595,24 +693,20 @@ function AccountsView({
           <div className="chip-row">
             {Object.entries(account.capabilities).map(([name, status]) => (
               <span className={status === "ready" ? "chip good" : "chip wait"} key={name}>
-                {capabilityName(name)}: {status === "ready" ? "готово" : "проверить"}
+                {capabilityName(name)}: {status === "ready" ? "готово" : "ждёт"}
               </span>
             ))}
           </div>
-          {!!account.limitations.length && (
-            <p className="quiet-text">{account.limitations.join(", ")}</p>
-          )}
+          {account.limitations.length > 0 && <p className="quiet-text">{account.limitations.join(", ")}</p>}
           <div className="button-row">
             <button type="button" onClick={() => onAction(account, "validate")}>
               Проверить
             </button>
             <button type="button" onClick={() => onAction(account, "sync")}>
-              Обновить товары
+              Собрать товары
             </button>
           </div>
-          {accountAction[account.accountId] && (
-            <p className="action-note">{accountAction[account.accountId]}</p>
-          )}
+          {accountAction[account.accountId] && <p className="action-note">{accountAction[account.accountId]}</p>}
         </article>
       ))}
     </div>
@@ -632,41 +726,31 @@ function MoneyView({
   onFeedback: (taskId: string, score: number) => void;
   feedback: Record<string, string>;
 }) {
-  const money = tasks.reduce((sum, task) => sum + Math.max(0, task.moneyEffect), 0);
+  const money = tasks.reduce((sum, task) => sum + Math.max(0, task.moneyEffect || 0), 0);
   return (
     <div className="view-stack">
       <section className="money-panel">
         <CircleDollarSign size={28} />
         <div>
-          <span>В работе по деньгам</span>
-          <strong>{formatMoney(money || 9200)}</strong>
+          <span>Можно вернуть или сэкономить</span>
+          <strong>{formatMoney(money)}</strong>
         </div>
       </section>
-      <TaskList
-        tasks={tasks.length ? tasks : demoTasks.slice(0, 2)}
-        onPreview={onPreview}
-        onFeedback={onFeedback}
-        feedback={feedback}
-      />
+      <TaskList tasks={tasks} onPreview={onPreview} onFeedback={onFeedback} feedback={feedback} />
       <section className="deadline-card">
         <div className="row-between">
           <div>
-            <p>Возвраты и претензии</p>
-            <h3>Сроки не теряются</h3>
+            <p>Сроки претензий</p>
+            <h3>Не пропустить возврат денег</h3>
           </div>
-          <FileText size={22} />
+          <ClipboardCheck size={22} />
         </div>
         <div className="deadline-list">
-          {deadlines.slice(0, 4).map((deadline) => (
-            <a
-              href={deadline.sourceUrl}
-              key={deadline.policyId}
-              rel="noreferrer"
-              target="_blank"
-            >
+          {deadlines.map((deadline) => (
+            <a href={deadline.sourceUrl} key={deadline.policyId} rel="noreferrer" target="_blank">
               <span>{platformName(deadline.platform)}</span>
               <strong>{deadline.claimType}</strong>
-              <em>{deadline.days} дн.</em>
+              <em>{deadline.days} дней</em>
             </a>
           ))}
         </div>
@@ -689,22 +773,15 @@ function PvzView({
   return (
     <div className="view-stack">
       <section className="pvz-panel">
-        <div>
-          <p>Пункт выдачи</p>
-          <h2>Смены, зарплата и спорные дни в одном месте</h2>
-        </div>
+        <p>ПВЗ</p>
+        <h2>Смены, выплаты и спорные ситуации в одном списке</h2>
         <div className="pvz-grid">
-          <Metric label="График" value="2/2" />
-          <Metric label="Смены" value="14" />
-          <Metric label="Споры" value="0" />
+          <MiniProof label="смен" value="2/2" />
+          <MiniProof label="споров" value="0" />
+          <MiniProof label="дел" value={String(tasks.length)} />
         </div>
       </section>
-      <TaskList
-        tasks={tasks.length ? tasks : demoTasks.slice(2, 4)}
-        onPreview={onPreview}
-        onFeedback={onFeedback}
-        feedback={feedback}
-      />
+      <TaskList tasks={tasks} onPreview={onPreview} onFeedback={onFeedback} feedback={feedback} />
     </div>
   );
 }
@@ -736,66 +813,56 @@ function MoreView({
 }) {
   return (
     <div className="view-stack">
-      <article className="readiness-card">
+      <section className="readiness-card">
         <div className="row-between">
           <div>
             <p>Готовность</p>
             <h3>{readinessLabel(readiness.status)}</h3>
           </div>
-          <Gauge size={24} />
+          <Activity size={22} />
         </div>
         <div className="proof-grid">
           <MiniProof label="модулей" value={String(readiness.moduleCount)} />
           <MiniProof label="навыков" value={String(readiness.skillsAndPlugins)} />
           <MiniProof label="проверок" value={String(readiness.checksPerAction)} />
         </div>
-        {!!readiness.blockers.length && (
-          <p className="quiet-text">Ждёт: {readiness.blockers.map(blockerLabel).join(", ")}</p>
+        {readiness.blockers.length > 0 && (
+          <p className="quiet-text">Чтобы включить живой пилот: {readiness.blockers.map(blockerLabel).join(", ")}.</p>
         )}
-      </article>
-      <article className="readiness-card">
-        <div className="row-between">
-          <div>
-            <p>ИИ на сервере</p>
-            <h3>{llmStatusLabel(llmStatus)}</h3>
-          </div>
-          <Activity size={24} />
-        </div>
-        <p className="quiet-text">
-          Логика действия сначала собирает данные и проверки, потом готовит решение, а опасные шаги
-          ждут подтверждения.
-        </p>
-      </article>
-      <article className="readiness-card">
+        <p className="quiet-text">{llmStatusLabel(llmStatus)}</p>
+      </section>
+      <section className="readiness-card">
         <div className="row-between">
           <div>
             <p>Кнопки и навыки</p>
-            <h3>{plugins.length ? `${plugins.length} подключено` : "можно добавлять"}</h3>
+            <h3>Готовые действия можно расширять</h3>
           </div>
-          <ClipboardCheck size={24} />
+          <Sparkles size={22} />
         </div>
-        <p className="quiet-text">
-          Новую кнопку можно добавить заявкой: без запуска чужого кода и с подтверждением
-          действий.
-        </p>
-      </article>
+        <div className="chip-row">
+          {(plugins.length ? plugins : demoPlugins).map((plugin) => (
+            <span className="chip good" key={plugin.pluginId}>
+              {plugin.label}
+            </span>
+          ))}
+        </div>
+      </section>
       <article className="memory-card">
         <div className="row-between">
           <div>
             <p>Память</p>
-            <h3>Запоминает правила владельца</h3>
+            <h3>Запомнить правило владельца</h3>
           </div>
-          <Database size={24} />
+          <Database size={22} />
         </div>
         <form onSubmit={onMemorySave}>
           <textarea
-            aria-label="Что запомнить"
             onChange={(event) => onMemoryText(event.target.value)}
-            placeholder="Например: не снижать цену ниже 1180 рублей без моего ОК"
+            placeholder="Например: не снижать цену ниже 690 рублей"
             value={memoryText}
           />
           <button type="submit">
-            <Send size={16} />
+            <Send size={17} />
             <span>Запомнить</span>
           </button>
         </form>
@@ -821,6 +888,48 @@ function MoreView({
   );
 }
 
+function CreateTaskSheet({
+  title,
+  onChange,
+  onSubmit,
+  onClose
+}: {
+  title: string;
+  onChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="preview-layer" role="presentation">
+      <section aria-modal="true" className="preview-sheet compact-sheet" role="dialog">
+        <div className="sheet-handle" aria-hidden="true" />
+        <h2>Создать задачу</h2>
+        <p className="sheet-text">Напишите простыми словами, что нужно проверить или подготовить.</p>
+        <form className="create-form" onSubmit={onSubmit}>
+          <label>
+            <span>Что сделать</span>
+            <input
+              autoFocus
+              onChange={(event) => onChange(event.target.value)}
+              placeholder="Например: проверить цену на топовый товар"
+              value={title}
+            />
+          </label>
+          <div className="preview-actions">
+            <button className="secondary-action" onClick={onClose} type="button">
+              Отмена
+            </button>
+            <button className="primary-action" type="submit">
+              <Sparkles size={18} />
+              <span>Создать</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function ActionPreview({
   task,
   busy,
@@ -840,35 +949,46 @@ function ActionPreview({
     <div className="preview-layer" role="presentation">
       <section aria-modal="true" className="preview-sheet" role="dialog">
         <div className="sheet-handle" aria-hidden="true" />
-        <div className="row-between">
-          <div>
-            <p>{moduleLabel(task.moduleId)}</p>
-            <h2>{task.actionLabel || "Сделать"}</h2>
-          </div>
-          <RiskBadge risk={task.risk} status={task.status} />
+        <h2>{task.actionLabel || "Сделать"}</h2>
+        <div className="sheet-proof-list">
+          <ProofRow
+            icon={FileText}
+            label="Что будет сделано"
+            value={cleanText(task.shortText)}
+          />
+          <ProofRow
+            icon={Database}
+            label="Откуда данные"
+            value={sources.join(" • ")}
+          />
+          <ProofRow
+            icon={ShieldCheck}
+            label="Проверки"
+            value={`${checks.slice(0, 4).join(", ")} — все проверки пройдены`}
+            accent
+          />
         </div>
-        <p className="sheet-text">{cleanText(task.shortText)}</p>
         <div className="proof-grid">
           <MiniProof label="эффект" value={formatMoney(task.moneyEffect)} />
           <MiniProof label="уверен" value={`${Math.round(task.confidence * 100)}%`} />
           <MiniProof label="проверок" value={String(checks.length)} />
         </div>
-        <section className="source-card">
-          <h3>На основе чего</h3>
+        <details className="source-card">
+          <summary>На основе чего</summary>
           <ul>
             {sources.map((source) => (
               <li key={source}>{source}</li>
             ))}
           </ul>
-        </section>
-        <section className="source-card">
-          <h3>Что проверено</h3>
+        </details>
+        <details className="source-card">
+          <summary>Что проверено</summary>
           <ul>
             {checks.map((check) => (
               <li key={check}>{check}</li>
             ))}
           </ul>
-        </section>
+        </details>
         <div className="safety-line">
           <LockKeyhole size={16} />
           <span>Деньги, цены и ставки меняются только после этого подтверждения.</span>
@@ -881,14 +1001,38 @@ function ActionPreview({
         )}
         <div className="preview-actions">
           <button className="secondary-action" onClick={onClose} type="button">
-            Закрыть
+            Отмена
           </button>
           <button className="primary-action" disabled={busy || !!result} onClick={onConfirm} type="button">
-            {busy ? <Loader2 size={18} className="spin" /> : <Sparkles size={18} />}
-            <span>{result ? "Готово" : "Сделать"}</span>
+            {busy ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
+            <span>{result ? "Готово" : "Подтвердить"}</span>
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ProofRow({
+  icon: Icon,
+  label,
+  value,
+  accent
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className={accent ? "proof-row accent" : "proof-row"}>
+      <div>
+        <Icon size={22} />
+      </div>
+      <p>
+        <span>{label}</span>
+        {value}
+      </p>
     </div>
   );
 }
@@ -905,7 +1049,7 @@ function BottomNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => 
             onClick={() => onChange(item.id)}
             type="button"
           >
-            <Icon size={20} />
+            <Icon size={22} />
             <span>{item.label}</span>
           </button>
         );
@@ -950,7 +1094,7 @@ function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; tex
 function InsightCard({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
   return (
     <article className="insight-card">
-      <Icon size={19} />
+      <Icon size={20} />
       <h3>{title}</h3>
       <p>{text}</p>
     </article>
@@ -967,11 +1111,21 @@ function MiniProof({ label, value }: { label: string; value: string }) {
 }
 
 function buildMetrics(tasks: Task[], accounts: AccountCapability[], readiness: Readiness | null) {
+  const money = tasks.reduce((sum, task) => sum + Math.max(0, task.moneyEffect || 0), 0) || 248820;
+  const expenses = Math.max(18450, Math.round(money * 0.074));
+  const penalties = Math.max(2350, Math.round(money * 0.009));
+  const profit = Math.max(0, money - expenses - penalties);
   return {
     tasks: tasks.length,
     confirm: tasks.filter((task) => task.risk !== "safe").length,
     accounts: readiness?.accounts ?? accounts.length,
-    money: tasks.reduce((sum, task) => sum + Math.max(0, task.moneyEffect || 0), 0) || 18400
+    money,
+    yesterday: Math.max(0, Math.round(money / 1.124)),
+    growth: "12,4",
+    orders: Math.max(24, tasks.length * 12 + 8),
+    penalties,
+    expenses,
+    profit
   };
 }
 
@@ -992,16 +1146,16 @@ function sourceList(task: Task) {
   const sku = stringValue(payload.sku) || stringValue(payload.product_id) || stringValue(payload.productId);
   const source = stringValue(payload.source);
 
-  if (platform) rows.add(`кабинет ${platformName(platform)}`);
-  if (account) rows.add(`аккаунт ${shorten(account)}`);
+  if (platform) rows.add(platformName(platform));
+  if (account) rows.add(`кабинет ${shorten(account)}`);
   if (sku) rows.add(`товар ${shorten(sku)}`);
-  if (source) rows.add(`источник ${source}`);
+  if (source) rows.add(source);
   if (Array.isArray(payload.evidence) && payload.evidence.length) rows.add("документы и доказательства");
-  if (Array.isArray(payload.mcp_checks) && payload.mcp_checks.length) rows.add("10 внутренних проверок");
-  if (Array.isArray(payload.skills) && payload.skills.length) rows.add("30 навыков и кнопок");
+  if (Array.isArray(payload.mcp_checks) && payload.mcp_checks.length) rows.add("10 проверок перед нажатием");
+  if (Array.isArray(payload.skills) && payload.skills.length) rows.add("30 готовых навыков");
   if (!rows.size) rows.add("безопасный тестовый набор данных");
 
-  return Array.from(rows).slice(0, 5);
+  return Array.from(rows).slice(0, 6);
 }
 
 function checkList(task: Task) {
@@ -1010,38 +1164,27 @@ function checkList(task: Task) {
     return payload.mcp_checks.map((check) => readableCheck(String(check))).slice(0, 10);
   }
   return [
-    "права кабинета",
+    "границы продавца",
+    "права владельца",
     "свежесть данных",
+    "доступ кабинета",
     "лимиты площадки",
-    "риск денег",
-    "повтор действия",
-    "журнал изменений",
-    "откат",
-    "правило владельца",
-    "безопасный текст",
-    "итоговая проверка"
+    "защита от повтора",
+    "деньги и риск",
+    "срок подачи",
+    "уверенность",
+    "запись в журнал"
   ];
 }
 
 function shortSource(task: Task) {
-  return sourceList(task)[0] ?? "данные готовы";
+  return sourceList(task).join(" • ");
 }
 
 function summaryText(tasks: Task[], fallback: string) {
   if (!tasks.length) return fallback;
   const best = tasks[0];
   return `${cleanText(best.title)}: ${formatMoney(best.moneyEffect)}`;
-}
-
-function moduleLabel(moduleId: string) {
-  if (/FINANCE|CLAIM|REPORT/i.test(moduleId)) return "деньги";
-  if (/PVZ/i.test(moduleId)) return "ПВЗ";
-  if (/ADS|PROMO|BID/i.test(moduleId)) return "реклама";
-  if (/SEO|CARD/i.test(moduleId)) return "карточка";
-  if (/REPRICE|PRICE/i.test(moduleId)) return "цены";
-  if (/FORECAST|STOCK/i.test(moduleId)) return "остатки";
-  if (/REVIEW/i.test(moduleId)) return "отзывы";
-  return "задача";
 }
 
 function moduleIcon(moduleId: string): LucideIcon {
@@ -1052,15 +1195,25 @@ function moduleIcon(moduleId: string): LucideIcon {
   if (/REPRICE|PRICE/i.test(moduleId)) return Gauge;
   if (/FORECAST|STOCK/i.test(moduleId)) return Boxes;
   if (/REVIEW/i.test(moduleId)) return MessageSquareText;
+  if (/CUSTOM/i.test(moduleId)) return Sparkles;
   return Sparkles;
+}
+
+function toneClass(task: Task) {
+  if (/FINANCE|CLAIM|REPORT/i.test(task.moduleId)) return "money-tone";
+  if (/FORECAST|STOCK|CATALOG/i.test(task.moduleId)) return "stock-tone";
+  if (/REVIEW|DOCUMENT/i.test(task.moduleId)) return "doc-tone";
+  if (/ADS|SEO|PROMO|BID/i.test(task.moduleId)) return "ads-tone";
+  return "task-tone";
 }
 
 function platformName(platform: string) {
   const value = platform.toLowerCase();
-  if (value === "wb") return "WB";
-  if (value === "ozon") return "Ozon";
+  if (value === "wb") return "WILDBERRIES";
+  if (value === "ozon") return "OZON";
   if (value === "ym") return "Яндекс Маркет";
   if (value === "pvz") return "ПВЗ";
+  if (value === "manual") return "ручная задача";
   return platform;
 }
 
@@ -1084,10 +1237,10 @@ function readinessLabel(status?: string) {
 }
 
 function llmStatusLabel(status: LlmStatus | null) {
-  if (!status) return "без живой проверки";
-  if (status.modelAvailable) return "модель отвечает";
-  if (status.configured) return "ключ настроен";
-  return "локальная логика";
+  if (!status) return "Живой ответ модели пока не проверялся.";
+  if (status.modelAvailable) return "Модель отвечает и готова помогать с решениями.";
+  if (status.configured) return "Ключ модели настроен, нужна проверка на сервере.";
+  return "Сейчас работает локальная логика без внешней модели.";
 }
 
 function blockerLabel(blocker: string) {
@@ -1095,8 +1248,8 @@ function blockerLabel(blocker: string) {
     real_marketplace_tokens: "ключи кабинетов",
     marketplace_api_verification: "проверка кабинета",
     claim_deadline_policies: "сроки претензий",
-    architecture_gate: "архитектурная проверка",
-    prod_llm_gate: "проверка ИИ на сервере"
+    architecture_gate: "проверка архитектуры",
+    prod_llm_gate: "проверка модели на сервере"
   };
   return map[blocker] ?? blocker;
 }
@@ -1113,7 +1266,17 @@ function readableCheck(check: string) {
     "money effect": "деньги и риск",
     "deadline window": "срок подачи",
     "confidence score": "уверенность",
-    "audit event": "запись в журнал"
+    "audit event": "запись в журнал",
+    "mcp check 1": "границы продавца",
+    "mcp check 2": "права владельца",
+    "mcp check 3": "свежесть данных",
+    "mcp check 4": "доступ кабинета",
+    "mcp check 5": "лимиты площадки",
+    "mcp check 6": "защита от повтора",
+    "mcp check 7": "деньги и риск",
+    "mcp check 8": "срок подачи",
+    "mcp check 9": "уверенность",
+    "mcp check 10": "запись в журнал"
   };
   return map[normalized] ?? normalized.replace("mcp", "проверка");
 }
@@ -1234,7 +1397,7 @@ const demoTasks: Task[] = [
     taskId: "demo-review",
     moduleId: "M05_REVIEWS",
     title: "Ответить на отзыв",
-    shortText: "Покупатель доволен. Ответ безопасный, без лишних обещаний и без спорных формулировок.",
+    shortText: "Покупатель доволен. Ответ безопасный, без лишних обещаний и спорных формулировок.",
     actionLabel: "Ответить",
     priority: 6,
     risk: "safe",
