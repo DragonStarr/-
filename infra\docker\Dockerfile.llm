@@ -1,0 +1,5 @@
+FROM ollama/ollama:latest
+
+# Local-first LLM service. The model is pulled by the deployment runbook
+# so the image never stores secrets or external provider keys.
+EXPOSE 11434

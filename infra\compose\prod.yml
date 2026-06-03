@@ -1,0 +1,55 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    env_file: ../../.env
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    env_file: ../../.env
+    depends_on:
+      - postgres
+      - redis
+      - ollama
+    restart: unless-stopped
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: operator_day
+      POSTGRES_USER: operator
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../backups:/backups
+    secrets:
+      - postgres_password
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  ollama:
+
+secrets:
+  postgres_password:
+    file: ../../secrets/postgres_password.txt
