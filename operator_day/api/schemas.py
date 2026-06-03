@@ -92,6 +92,9 @@ class ArchitectureGateOut(BaseModel):
 class LlmStatusOut(BaseModel):
     configured: bool
     model: str
+    primary_provider: str = Field(alias="primaryProvider")
+    primary_model: str = Field(alias="primaryModel")
+    external_enabled: bool = Field(alias="externalEnabled")
     smoke_enabled: bool = Field(alias="smokeEnabled")
     live_check_requested: bool = Field(alias="liveCheckRequested")
     live_check_ran: bool = Field(alias="liveCheckRan")
@@ -219,3 +222,47 @@ class ValidateAccountOut(BaseModel):
     status: str
     dry_run: bool = Field(alias="dryRun")
     planned_operation: dict[str, Any] | None = Field(default=None, alias="plannedOperation")
+
+
+class PluginManifestIn(BaseModel):
+    id: str = Field(min_length=3, max_length=80)
+    label: str = Field(min_length=2, max_length=80)
+    surface: str = Field(default="both")
+    module_id: str = Field(alias="moduleId", min_length=2, max_length=20)
+    action: str = Field(min_length=3, max_length=80)
+    input_schema: dict[str, Any] = Field(default_factory=dict, alias="inputSchema")
+    scopes: list[str] = Field(default_factory=list, max_length=20)
+    required_role: str = Field(default="owner", alias="requiredRole")
+    requires_confirm: bool = Field(default=True, alias="requiresConfirm")
+    activate: bool = False
+
+
+class PluginManifestOut(BaseModel):
+    plugin_id: str = Field(alias="pluginId")
+    label: str
+    surface: str
+    module_id: str = Field(alias="moduleId")
+    action: str
+    status: str
+    requires_confirm: bool = Field(alias="requiresConfirm")
+    input_schema: dict[str, Any] = Field(alias="inputSchema")
+
+
+class SelfUpdatePlanIn(BaseModel):
+    source: str = Field(min_length=10, max_length=500)
+    current_snapshot: str = Field(default="vendor/_snapshots/current", alias="currentSnapshot")
+
+
+class SelfUpdateRunIn(BaseModel):
+    source: str = Field(min_length=10, max_length=500)
+    diff_text: str = Field(default="", alias="diffText", max_length=12000)
+
+
+class SelfUpdateOut(BaseModel):
+    run_id: str | None = Field(default=None, alias="runId")
+    source: str
+    current_snapshot: str = Field(alias="currentSnapshot")
+    candidate_snapshot: str = Field(alias="candidateSnapshot")
+    status: str
+    gates: dict[str, str]
+    notes: list[str]

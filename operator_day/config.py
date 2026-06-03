@@ -14,16 +14,28 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
     public_base_url: str = "http://localhost:8000"
     token_encryption_key: str = ""
+    llm_primary_provider: str = "local"
+    local_llm_base_url: str = "http://localhost:11434/v1"
+    local_llm_model: str = "qwen3:8b"
+    external_llm_enabled: bool = False
     freemodel_api_key: str = Field(default="", repr=False)
     freemodel_base_url: str = "https://api.freemodel.dev/v1"
     freemodel_fallback_base_url: str = "https://freemodel.dev/v1"
-    freemodel_model: str = "claude-opus-4-8"
+    freemodel_model: str = "gpt-5.4"
     llm_daily_token_budget: int = 200_000
     llm_smoke_enabled: bool = False
+    miniapp_public_url: str = "http://localhost:5173"
+    enable_metrics: bool = True
 
     def validate_runtime(self) -> None:
-        if self.app_env.lower() in {"prod", "production"} and not self.token_encryption_key:
-            raise ValueError("TOKEN_ENCRYPTION_KEY is required in production")
+        if self.app_env.lower() in {"prod", "production"}:
+            missing: list[str] = []
+            if not self.token_encryption_key:
+                missing.append("TOKEN_ENCRYPTION_KEY")
+            if not self.telegram_webhook_secret:
+                missing.append("TELEGRAM_WEBHOOK_SECRET")
+            if missing:
+                raise ValueError(f"{', '.join(missing)} is required in production")
 
 
 @lru_cache

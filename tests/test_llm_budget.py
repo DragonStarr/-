@@ -10,7 +10,7 @@ async def test_llm_router_falls_back_when_budget_would_be_exceeded() -> None:
     settings = Settings(
         freemodel_api_key="test-secret",
         llm_daily_token_budget=3,
-        freemodel_model="claude-opus-4-8",
+        freemodel_model="gpt-5.4",
     )
     router = LlmRouter(settings)
 
@@ -50,6 +50,8 @@ async def test_llm_router_uses_responses_api_and_detects_model_substitution() ->
         freemodel_api_key="test-secret",
         freemodel_model="claude-opus-4-8",
         freemodel_base_url="https://api.freemodel.dev/v1",
+        llm_primary_provider="external",
+        external_llm_enabled=True,
     )
     router = LlmRouter(settings, client_factory=client_factory)
 

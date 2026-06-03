@@ -22,7 +22,7 @@ async def test_readiness_reports_modules_capabilities_and_blockers() -> None:
     assert body["architectureGatePassed"] is False
     assert "real_marketplace_tokens" in body["blockers"]
     assert "claim_deadline_policies" in body["blockers"]
-    assert "llm_architecture_gate" in body["blockers"]
+    assert "prod_llm_gate" in body["blockers"]
 
 
 async def test_readiness_reports_live_blocked_until_account_is_validated() -> None:
@@ -46,7 +46,7 @@ async def test_readiness_reports_live_blocked_until_account_is_validated() -> No
     assert body["status"] == "blocked_for_live_pilot"
     assert body["mode"] == "live"
     assert "marketplace_api_verification" in body["blockers"]
-    assert "llm_architecture_gate" in body["blockers"]
+    assert "prod_llm_gate" in body["blockers"]
 
 
 async def test_readiness_repository_records_architecture_gate_pass(session_factory) -> None:

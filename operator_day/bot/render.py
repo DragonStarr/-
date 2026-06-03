@@ -33,7 +33,7 @@ def render_accounts_status(accounts) -> str:
     if not accounts:
         return (
             "Кабинеты пока не подключены.\n"
-            "Подключи кабинет WB, Ozon или Яндекс Маркета, и я начну собирать реальные дела."
+            "Подключите WB, Ozon или Яндекс Маркет, и я начну собирать реальные дела."
         )
     lines = ["Кабинеты:"]
     for account in accounts:
@@ -41,7 +41,7 @@ def render_accounts_status(accounts) -> str:
         for name, status in account.capabilities.items():
             label = _capability_label(name, status)
             if label:
-                lines.append(f"• {label}")
+                lines.append(f"- {label}")
     return "\n".join(lines)
 
 
@@ -59,5 +59,5 @@ def _capability_label(name: str, status: str) -> str:
     if status == "needs_credentials":
         return f"{readable} ждёт ключ"
     if status == "needs_api_verification":
-        return f"{readable} нужно проверить в кабинете"
+        return f"{readable} нужно проверить"
     return ""

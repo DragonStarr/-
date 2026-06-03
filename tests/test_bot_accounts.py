@@ -6,7 +6,7 @@ def test_render_accounts_status_without_accounts_is_plain() -> None:
     text = render_accounts_status([])
 
     assert "replay" not in text.lower()
-    assert "Подключи кабинет" in text
+    assert "Подключите" in text
     assert "/" not in text
 
 

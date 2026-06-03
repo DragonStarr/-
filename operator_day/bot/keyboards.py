@@ -5,8 +5,10 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 
+from operator_day.config import get_settings
 from operator_day.domain import ConnectedAccount, TaskAction
 
 
@@ -19,6 +21,19 @@ def main_menu() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
         input_field_placeholder="Выберите кнопку",
+    )
+
+
+def miniapp_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Открыть экран",
+                    web_app=WebAppInfo(url=get_settings().miniapp_public_url),
+                )
+            ]
+        ]
     )
 
 

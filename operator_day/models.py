@@ -312,3 +312,45 @@ class ClickFraud(JsonTenantRecord):
 
 class WhitehatTip(JsonTenantRecord):
     __tablename__ = "whitehat_tips"
+
+
+class PluginManifest(Base, TenantBound):
+    __tablename__ = "plugin_manifests"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "plugin_id", name="uq_plugin_manifest_tenant_plugin"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    plugin_id: Mapped[str] = mapped_column(String(120), index=True)
+    label: Mapped[str] = mapped_column(String(160))
+    surface: Mapped[str] = mapped_column(String(32), default="bot")
+    module_id: Mapped[str] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    requires_confirm: Mapped[int] = mapped_column(Integer, default=1)
+    schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SelfUpdateRun(Base, TenantBound):
+    __tablename__ = "self_update_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    source: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(32), default="planned", index=True)
+    current_snapshot: Mapped[str] = mapped_column(String(160), default="")
+    candidate_snapshot: Mapped[str] = mapped_column(String(160), default="")
+    gates: Mapped[dict] = mapped_column(JSON, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HealthCheck(Base, TenantBound):
+    __tablename__ = "health_checks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    component: Mapped[str] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

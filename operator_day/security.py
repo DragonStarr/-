@@ -8,7 +8,22 @@ from cryptography.fernet import Fernet
 
 SECRET_PATTERNS = [
     re.compile(r"fe_oa_[a-zA-Z0-9]+"),
+    re.compile(r"ghp_[a-zA-Z0-9_]+"),
+    re.compile(r"github_pat_[a-zA-Z0-9_]+"),
+    re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
+]
+
+PROMPT_INJECTION_PATTERNS = [
+    re.compile(r"(?i)ignore\s+(all\s+)?previous\s+instructions"),
+    re.compile(r"(?i)system\s*prompt"),
+    re.compile(r"(?i)developer\s+message"),
+    re.compile(r"(?i)reveal\s+(your\s+)?(rules|instructions|secrets)"),
+    re.compile(r"(?i)act\s+as\s+(system|developer|admin)"),
+    re.compile(r"(?i)jailbreak"),
+    re.compile(r"(?i)не\s+выполняй\s+предыдущ"),
+    re.compile(r"(?i)игнорируй\s+(все\s+)?(инструкции|правила)"),
+    re.compile(r"(?i)раскрой\s+(системн|секрет|ключ)"),
 ]
 
 
@@ -17,6 +32,14 @@ def redact_secret(value: str) -> str:
     for pattern in SECRET_PATTERNS:
         redacted = pattern.sub("[REDACTED]", redacted)
     return redacted
+
+
+def neutralize_external_text(value: str, *, limit: int = 12_000) -> str:
+    """Treat untrusted text as data before it reaches an LLM prompt."""
+    cleaned = redact_secret(value)[:limit]
+    for pattern in PROMPT_INJECTION_PATTERNS:
+        cleaned = pattern.sub("[blocked external instruction]", cleaned)
+    return cleaned
 
 
 def fingerprint_secret(value: str) -> str:

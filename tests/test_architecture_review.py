@@ -29,25 +29,25 @@ async def test_architecture_gate_builds_machine_readable_topology_with_fallback(
     assert "connector_operations" in gate.topology
     assert "database_tables" in gate.topology
     assert "/api/accounts/{account_id}/validate" in gate.topology["api_contracts"]
-    assert "live Opus 4.8 gate" in gate.blockers[0]
+    assert "prod LLM gate" in gate.blockers[0]
 
 
-async def test_architecture_gate_accepts_clean_opus_verdict() -> None:
-    class FakeOpus:
+async def test_architecture_gate_accepts_clean_prod_llm_verdict() -> None:
+    class FakeProdLlm:
         async def complete_json_safe(self, prompt: str, *, max_tokens: int = 500):
             assert "TOPOLOGY_JSON=" in prompt
             assert "ProductAPI_GetProductList" in prompt
             return LlmResponse(
                 text='verdict=pass, blockers=[], fixes=["keep current gates"]',
-                model="claude-opus-4-8",
+                model="qwen3:8b",
                 used_fallback=False,
                 tokens_estimate=111,
             )
 
-    gate = await ArchitectureReviewService(FakeOpus()).build_gate()  # type: ignore[arg-type]
+    gate = await ArchitectureReviewService(FakeProdLlm()).build_gate()  # type: ignore[arg-type]
 
     assert gate.verdict == "pass"
-    assert gate.model == "claude-opus-4-8"
+    assert gate.model == "qwen3:8b"
     assert gate.blockers == ()
 
 
@@ -65,7 +65,7 @@ async def test_architecture_gate_reports_provider_model_substitution() -> None:
 
     assert gate.verdict == "needs_work"
     assert gate.model == "gpt-5.4"
-    assert "вместо claude-opus-4-8" in gate.blockers[0]
+    assert "замена модели" in gate.blockers[0]
 
 
 async def test_architecture_review_api_is_owner_only() -> None:
@@ -89,8 +89,8 @@ async def test_architecture_review_api_is_owner_only() -> None:
     assert ok.status_code == 200
     assert ok.json()["usedFallback"] is True
     assert gate.status_code == 200
-    assert gate.json()["topology"]["llm_role"] == "opus_4_8_senior_architect_gate"
-    assert gate.json()["model"] == "live-gate-disabled"
+    assert gate.json()["topology"]["llm_role"] == "model_agnostic_prod_gate_local_primary"
+    assert gate.json()["model"] == "prod-gate-disabled"
 
 
 async def test_architecture_gate_does_not_spend_tokens_without_smoke_flag(monkeypatch) -> None:
@@ -112,8 +112,8 @@ async def test_architecture_gate_does_not_spend_tokens_without_smoke_flag(monkey
     assert gate.status_code == 200
     assert body["verdict"] == "needs_work"
     assert body["usedFallback"] is True
-    assert body["model"] == "live-gate-disabled"
-    assert "LLM_SMOKE_ENABLED" in body["blockers"][0]
+    assert body["model"] == "prod-gate-disabled"
+    assert "smoke-флаг" in body["blockers"][0]
 
 
 async def test_llm_status_is_owner_only_and_does_not_run_live_without_key(monkeypatch) -> None:
@@ -137,8 +137,11 @@ async def test_llm_status_is_owner_only_and_does_not_run_live_without_key(monkey
 
     assert denied.status_code == 403
     body = ok.json()
-    assert body["configured"] is False
-    assert body["model"] == "claude-opus-4-8"
+    assert body["configured"] is True
+    assert body["model"] == "qwen3:8b"
+    assert body["primaryProvider"] == "local"
+    assert body["primaryModel"] == "qwen3:8b"
+    assert body["externalEnabled"] is False
     assert body["liveCheckRequested"] is True
     assert body["liveCheckRan"] is False
-    assert body["status"] == "not_configured"
+    assert body["status"] == "live_disabled"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from operator_day.api.context import get_tenant_context, normalize_idempotency_key
@@ -21,10 +22,15 @@ from operator_day.api.schemas import (
     ConfirmOut,
     FeedbackIn,
     LlmStatusOut,
+    PluginManifestIn,
+    PluginManifestOut,
     PvzImportIn,
     PvzImportOut,
     ReviewsImportIn,
     ReviewsImportOut,
+    SelfUpdateOut,
+    SelfUpdatePlanIn,
+    SelfUpdateRunIn,
     SyncCatalogIn,
     SyncCatalogOut,
     TaskOut,
@@ -44,6 +50,7 @@ from operator_day.connectors.replay import DatabaseReplayHub
 from operator_day.db import get_session
 from operator_day.domain import TenantContext
 from operator_day.modules.implementations import ModuleRegistry
+from operator_day.plugins.registry import validate_plugin_manifest
 from operator_day.policies import (
     ensure_can_confirm,
     ensure_can_connect_account,
@@ -54,12 +61,16 @@ from operator_day.repositories import (
     CatalogRepository,
     ClaimPolicyRepository,
     ClaimRepository,
+    PluginRepository,
     PvzRepository,
     ReadinessRepository,
     ReviewRepository,
+    SelfUpdateRepository,
     TaskRepository,
 )
+from operator_day.selfupdate.pipeline import SelfUpdatePipeline
 from operator_day.skills_catalog import CORE_MCP_CHECKS, all_operator_capabilities
+from operator_day.telemetry.metrics import render_prometheus_metrics
 
 router = APIRouter()
 orchestrator = MorningOrchestrator()
@@ -69,7 +80,12 @@ ContextDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
 @router.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok", "mode": "backend-only"}
+    return {"status": "ok", "mode": "bot-miniapp-autonomous"}
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics() -> str:
+    return render_prometheus_metrics()
 
 
 @router.get("/api/tasks/morning", response_model=list[TaskOut])
@@ -300,7 +316,7 @@ async def readiness(session: SessionDep, ctx: ContextDep) -> dict:
     if not claim_policies:
         blockers.append("claim_deadline_policies")
     if not gate_passed:
-        blockers.append("llm_architecture_gate")
+        blockers.append("prod_llm_gate")
     status = "ready_for_live_pilot"
     if "real_marketplace_tokens" in blockers:
         status = "ready_for_replay_pilot"
@@ -339,7 +355,7 @@ async def architecture_gate(
 ) -> ArchitectureGateOut:
     ensure_can_connect_account(ctx)
     settings = get_settings()
-    force_offline = not (live and settings.llm_smoke_enabled and bool(settings.freemodel_api_key))
+    force_offline = not (live and settings.llm_smoke_enabled)
     gate = await ArchitectureReviewService(LlmRouter(settings)).build_gate(
         force_offline=force_offline
     )
@@ -364,7 +380,7 @@ async def architecture_gate(
 async def llm_status(ctx: ContextDep, live: bool = False) -> LlmStatusOut:
     ensure_can_connect_account(ctx)
     settings = get_settings()
-    configured = bool(settings.freemodel_api_key)
+    configured = bool(settings.local_llm_base_url) or bool(settings.freemodel_api_key)
     live_check_ran = False
     model_available: bool | None = None
     status = "not_configured"
@@ -383,13 +399,86 @@ async def llm_status(ctx: ContextDep, live: bool = False) -> LlmStatusOut:
             status = "live_error"
     return LlmStatusOut(
         configured=configured,
-        model=settings.freemodel_model,
+        model=LlmRouter(settings).primary_model,
+        primaryProvider=settings.llm_primary_provider,
+        primaryModel=settings.local_llm_model,
+        externalEnabled=settings.external_llm_enabled,
         smokeEnabled=settings.llm_smoke_enabled,
         liveCheckRequested=live,
         liveCheckRan=live_check_ran,
         modelAvailable=model_available,
         status=status,
     )
+
+
+@router.get("/api/plugins", response_model=list[PluginManifestOut])
+async def list_plugins(session: SessionDep, ctx: ContextDep) -> list[PluginManifestOut]:
+    ensure_can_connect_account(ctx)
+    rows = await PluginRepository(session).list_manifests(ctx)
+    return [_plugin_out(row) for row in rows]
+
+
+@router.post("/api/plugins", response_model=PluginManifestOut)
+async def install_plugin(
+    payload: PluginManifestIn,
+    session: SessionDep,
+    ctx: ContextDep,
+) -> PluginManifestOut:
+    ensure_can_connect_account(ctx)
+    try:
+        manifest = validate_plugin_manifest(payload.model_dump(by_alias=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    row = await PluginRepository(session).install_manifest(
+        ctx,
+        manifest=manifest.model_dump(by_alias=False),
+        activate=payload.activate,
+    )
+    return _plugin_out(row)
+
+
+@router.post("/api/self-update/plan", response_model=SelfUpdateOut)
+async def plan_self_update(
+    payload: SelfUpdatePlanIn,
+    ctx: ContextDep,
+) -> SelfUpdateOut:
+    ensure_can_connect_account(ctx)
+    try:
+        candidate = await SelfUpdatePipeline(get_settings()).plan(
+            source=payload.source,
+            current_snapshot=payload.current_snapshot,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _self_update_out(candidate.as_payload())
+
+
+@router.post("/api/self-update/run", response_model=SelfUpdateOut)
+async def run_self_update_gate(
+    payload: SelfUpdateRunIn,
+    session: SessionDep,
+    ctx: ContextDep,
+) -> SelfUpdateOut:
+    ensure_can_connect_account(ctx)
+    try:
+        candidate = await SelfUpdatePipeline(get_settings()).run_dry_gate(
+            source=payload.source,
+            diff_text=payload.diff_text,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    row = await SelfUpdateRepository(session).save_run(
+        ctx,
+        source=candidate.source,
+        status=candidate.status,
+        current_snapshot=candidate.current_snapshot,
+        candidate_snapshot=candidate.candidate_snapshot,
+        gates=candidate.gates,
+        payload=candidate.as_payload(),
+    )
+    data = candidate.as_payload()
+    data["runId"] = row.id
+    return _self_update_out(data)
 
 
 @router.post("/api/claim-deadlines", response_model=ClaimDeadlineOut)
@@ -463,4 +552,29 @@ def _claim_deadline_out(row) -> ClaimDeadlineOut:
         days=row.days,
         sourceUrl=row.source_url,
         note=row.note,
+    )
+
+
+def _plugin_out(row) -> PluginManifestOut:
+    return PluginManifestOut(
+        pluginId=row.plugin_id,
+        label=row.label,
+        surface=row.surface,
+        moduleId=row.module_id,
+        action=row.action,
+        status=row.status,
+        requiresConfirm=bool(row.requires_confirm),
+        inputSchema=row.schema,
+    )
+
+
+def _self_update_out(payload: dict) -> SelfUpdateOut:
+    return SelfUpdateOut(
+        runId=payload.get("runId"),
+        source=payload["source"],
+        currentSnapshot=payload["currentSnapshot"],
+        candidateSnapshot=payload["candidateSnapshot"],
+        status=payload["status"],
+        gates=payload["gates"],
+        notes=list(payload.get("notes") or []),
     )

@@ -226,6 +226,47 @@ def upgrade() -> None:
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
+    op.create_table(
+        "plugin_manifests",
+        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("tenant_id", sa.String(64), nullable=False, index=True),
+        sa.Column("plugin_id", sa.String(120), nullable=False, index=True),
+        sa.Column("label", sa.String(160), nullable=False),
+        sa.Column("surface", sa.String(32), nullable=False, server_default="bot"),
+        sa.Column("module_id", sa.String(32), nullable=False, index=True),
+        sa.Column("action", sa.String(120), nullable=False),
+        sa.Column("status", sa.String(32), nullable=False, server_default="draft", index=True),
+        sa.Column("requires_confirm", sa.Integer(), nullable=False, server_default="1"),
+        sa.Column("schema", sa.JSON(), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "plugin_id",
+            name="uq_plugin_manifest_tenant_plugin",
+        ),
+    )
+    op.create_table(
+        "self_update_runs",
+        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("tenant_id", sa.String(64), nullable=False, index=True),
+        sa.Column("source", sa.String(500), nullable=False),
+        sa.Column("status", sa.String(32), nullable=False, server_default="planned", index=True),
+        sa.Column("current_snapshot", sa.String(160), nullable=False, server_default=""),
+        sa.Column("candidate_snapshot", sa.String(160), nullable=False, server_default=""),
+        sa.Column("gates", sa.JSON(), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_table(
+        "health_checks",
+        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("tenant_id", sa.String(64), nullable=False, index=True),
+        sa.Column("component", sa.String(120), nullable=False, index=True),
+        sa.Column("status", sa.String(32), nullable=False, index=True),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
     for table in (
         "users",
         "accounts",
@@ -272,6 +313,9 @@ def upgrade() -> None:
         "risk_signals",
         "click_fraud",
         "whitehat_tips",
+        "plugin_manifests",
+        "self_update_runs",
+        "health_checks",
     ):
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(
@@ -286,6 +330,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     for table in (
         "whitehat_tips",
+        "health_checks",
+        "self_update_runs",
+        "plugin_manifests",
         "click_fraud",
         "risk_signals",
         "content_blocks",

@@ -39,8 +39,8 @@ class ArchitectureReviewService:
         tables = sorted(Base.metadata.tables)
         return {
             "product": "operator_day",
-            "mode": "backend_only_no_frontend_no_mini_app",
-            "llm_role": "opus_4_8_senior_architect_gate",
+            "mode": "bot_plus_miniapp_autonomous_backend",
+            "llm_role": "model_agnostic_prod_gate_local_primary",
             "external_accounts": {
                 "ozon": {
                     "auth": "Client-Id + Api-Key",
@@ -64,13 +64,16 @@ class ArchitectureReviewService:
                 },
             },
             "server_layers": [
-                "FastAPI headers -> TenantContext",
-                "policy checks",
+                "FastAPI headers or Telegram init data -> TenantContext",
+                "RBAC policy checks",
                 "connector catalog",
                 "transport safety gates",
                 "repositories with tenant scope",
-                "orchestrator ranking",
-                "Telegram button handlers",
+                "orchestrator scoring",
+                "Telegram bot buttons",
+                "Telegram Mini App / PWA shell",
+                "plugin manifest registry",
+                "self-update sandbox and last-known-good snapshots",
             ],
             "api_contracts": [
                 "/api/accounts",
@@ -82,14 +85,19 @@ class ArchitectureReviewService:
                 "/api/pvz/import",
                 "/api/tasks/morning",
                 "/api/tasks/{task_id}/confirm",
+                "/api/plugins",
+                "/api/self-update/plan",
+                "/api/self-update/run",
                 "/api/brain/architecture-gate",
                 "/api/brain/llm-status",
+                "/metrics",
                 "/telegram/webhook",
             ],
             "workers": [
                 "operator_day.collect_morning",
                 "operator_day.sync_catalog",
                 "operator_day.sync_ozon_catalog",
+                "operator_day.self_update_watch",
             ],
             "modules": [module.module_id.value for module in modules],
             "connector_operations": {
@@ -106,20 +114,23 @@ class ArchitectureReviewService:
             "safety_invariants": [
                 "no marketplace write without explicit OK and idempotency",
                 "tokens encrypted at rest and never returned in API responses",
-                "tenant_id on every business table with Postgres RLS",
+                "tenant_id on every business table with Postgres RLS or repository filters",
                 "claim deadlines are source-linked, not hardcoded as truth",
                 "each action payload carries 30+ skills/plugins and 10 mcp_checks",
-                "Opus 4.8 calls are budget-gated and read FREEMODEL_API_KEY only from env",
+                "local LLM is the primary brain; external models are optional accelerators",
+                "prompt-injection text is treated as data before LLM review",
                 "PVZ operators cannot change staff rates",
-                "frontend and mini app are intentionally out of current scope",
+                "plugins are manifests, not arbitrary user code",
+                "self-update never promotes without sandbox/test/canary gates",
             ],
             "readiness_gates": [
                 "real_marketplace_tokens",
                 "marketplace_api_verification",
                 "claim_deadline_policies",
-                "llm_architecture_gate",
+                "prod_llm_gate",
                 "tests_and_smoke",
                 "secret_scan",
+                "miniapp_build",
             ],
         }
 
@@ -127,22 +138,23 @@ class ArchitectureReviewService:
         modules = ", ".join(module.module_id.value for module in ModuleRegistry.default().modules)
         operations = ", ".join(sorted(operation_catalog().keys())[:20])
         prompt = (
-            "Проверь дерево backend-проекта «Оператор дня» для пилота селлеров и ПВЗ. "
-            "Опиши коротко: ЛК/API площадок -> transport/safety -> workers -> БД -> "
-            "orchestrator -> Telegram-кнопки. "
-            f"Модули: {modules}. "
-            f"Операции коннекторов: {operations}. "
-            "Не выдумывай неподтвержденные endpoint и отметь, где нужна API verification."
+            "Проверь дерево продукта «Оператор дня» для пилота селлеров и ПВЗ. "
+            "Кратко опиши поток: ЛК/API площадок -> transport/safety -> workers -> БД -> "
+            "orchestrator -> Telegram bot/Mini App -> действие -> аудит. "
+            f"Модули: {modules}. Операции коннекторов: {operations}. "
+            "Не выдумывай неподтверждённые endpoint. Отметь только практичные блокеры."
         )
         response = await self.llm.complete_json_safe(prompt, max_tokens=700)
         text = response.text
         if response.used_fallback:
             text = (
                 "ЛК площадок дают данные через проверенные операции connector catalog. "
-                "Transport сначала проверяет safety и лимиты, потом workers сохраняют снимки в БД. "
-                "БД хранит tenant_id, задачи, аудит, usage LLM и кабинеты без секретов. "
-                "Orchestrator собирает 23 направления в утренний список. "
-                "Telegram показывает только простые кнопки и не делает опасные действия без ОК."
+                "Transport проверяет safety, лимиты и retry, затем workers сохраняют снимки в БД. "
+                "БД хранит tenant_id, задачи, аудит, usage LLM и кабинеты без раскрытия секретов. "
+                "Orchestrator ранжирует дела по деньгам, срочности, риску и уверенности. "
+                "Бот и Mini App показывают простые кнопки; "
+                "опасные действия выполняются только после ОК. "
+                "Self-update остаётся на last known good, пока sandbox, тесты и canary не зелёные."
             )
         return ArchitectureReview(
             text=text,
@@ -156,18 +168,15 @@ class ArchitectureReviewService:
         *,
         force_offline: bool = False,
         disabled_reason: str = (
-            "live Opus 4.8 gate не выполнен: "
-            "FREEMODEL_API_KEY/LLM_SMOKE_ENABLED не активны"
+            "prod LLM gate не выполнен: локальная модель недоступна или smoke-флаг выключен"
         ),
     ) -> ArchitectureGate:
         topology = self.build_topology()
         prompt = (
-            "Ты Opus 4.8 в роли senior+ архитектора и конструктора backend-продукта. "
-            "Проверь дерево проекта для пилота реальных селлеров и владельцев ПВЗ. "
-            "Найди только практические блокеры автономной работы, конфликтующие связи ЛК/API-БД, "
-            "ошибки безопасности, пробелы readiness и места, где нельзя делать write без OK. "
-            "Ответь коротко на русском: verdict=pass|needs_work, blockers=[], fixes=[]. "
-            "Не выдумывай endpoint и не предлагай фронт/Mini App. "
+            "Ты проверяешь автономность и безопасность продукта. "
+            "Найди только практические блокеры: ЛК/API-БД, права, секреты, self-update, "
+            "плагины, Mini App, write без OK. "
+            "Ответь коротко: verdict=pass|needs_work, blockers=[], fixes=[]. "
             f"TOPOLOGY_JSON={json.dumps(topology, ensure_ascii=False, sort_keys=True)}"
         )
         if force_offline:
@@ -175,12 +184,12 @@ class ArchitectureReviewService:
                 topology=topology,
                 verdict="needs_work",
                 text=(
-                    "Топология проекта собрана, но live Opus 4.8 gate не запускался. "
-                    "Для сдачи live-пилота нужен явный прогон через env-key "
-                    "и включенный smoke-флаг."
+                    "Топология собрана, но prod LLM gate не запускался. "
+                    "Для live-пилота нужна доступная локальная модель "
+                    "или явно включённый smoke-прогон."
                 ),
                 blockers=(disabled_reason,),
-                model="live-gate-disabled",
+                model="prod-gate-disabled",
                 used_fallback=True,
                 tokens_estimate=max(1, int(len(prompt.split()) * 1.35)),
             )
@@ -188,17 +197,10 @@ class ArchitectureReviewService:
         blockers = _extract_blockers(response.text)
         verdict = "needs_work" if blockers else "pass"
         if response.used_fallback:
-            if response.model in {"offline-template", "budget-fallback", "provider-route-fallback"}:
-                blocker = (
-                    "live Opus 4.8 gate не выполнен: "
-                    "FREEMODEL_API_KEY/LLM_SMOKE_ENABLED не активны или provider route недоступен"
-                )
-            else:
-                blocker = (
-                    "live Opus 4.8 gate не выполнен: "
-                    f"FreeModel вернул {response.model} вместо claude-opus-4-8"
-                )
-            blockers = (blocker,)
+            blockers = (
+                "prod LLM gate не выполнен чисто: "
+                f"использована деградация или замена модели ({response.model})",
+            )
             verdict = "needs_work"
         return ArchitectureGate(
             topology=topology,
@@ -217,5 +219,5 @@ def _extract_blockers(text: str) -> tuple[str, ...]:
         return ()
     markers = ("blocker", "блокер", "needs_work", "нужно исправить")
     if any(marker in lowered for marker in markers):
-        return ("llm_architecture_gate_reported_blockers",)
+        return ("prod_llm_gate_reported_blockers",)
     return ()

@@ -3,7 +3,12 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from operator_day.bot.keyboards import accounts_keyboard, main_menu, task_keyboard
+from operator_day.bot.keyboards import (
+    accounts_keyboard,
+    main_menu,
+    miniapp_keyboard,
+    task_keyboard,
+)
 from operator_day.bot.render import render_accounts_status, render_task, render_welcome
 from operator_day.brain.orchestrator import MorningOrchestrator
 from operator_day.connectors.live_sync import (
@@ -32,6 +37,7 @@ async def user_context(message: Message | CallbackQuery) -> TenantContext:
 @router.message(F.text.in_({"/start", "Старт"}))
 async def start(message: Message) -> None:
     await message.answer(render_welcome(), reply_markup=main_menu())
+    await message.answer("Для большого экрана откройте Mini App.", reply_markup=miniapp_keyboard())
 
 
 @router.message(F.text == "Дела")
@@ -40,7 +46,7 @@ async def morning(message: Message) -> None:
     async with get_sessionmaker()() as session:
         tasks = await MorningOrchestrator(replay=DatabaseReplayHub(session, ctx)).morning_top(ctx)
         await TaskRepository(session).save_tasks(ctx, tasks)
-    await message.answer(f"Нашел {len(tasks)} главных дел.", reply_markup=main_menu())
+    await message.answer(f"Нашёл {len(tasks)} главных дел.", reply_markup=main_menu())
     for task in tasks:
         await message.answer(render_task(task), reply_markup=task_keyboard(task))
 
@@ -67,6 +73,8 @@ async def finance(message: Message) -> None:
             ).collect_all(ctx)
             if task.module_id.value in {"M08_FINANCE", "M20_CLAIMS"}
         ]
+    if not tasks:
+        await message.answer("Финансовых дел пока нет.", reply_markup=main_menu())
     for task in tasks:
         await message.answer(render_task(task), reply_markup=task_keyboard(task))
 
@@ -82,6 +90,8 @@ async def pvz(message: Message) -> None:
             ).collect_all(ctx)
             if task.module_id.value == "M11_PVZ"
         ]
+    if not tasks:
+        await message.answer("Дел по ПВЗ пока нет.", reply_markup=main_menu())
     for task in tasks:
         await message.answer(render_task(task), reply_markup=task_keyboard(task))
 
@@ -89,9 +99,10 @@ async def pvz(message: Message) -> None:
 @router.message(F.text == "Настройки")
 async def settings(message: Message) -> None:
     await message.answer(
-        "Пилотный режим включен. Реальные токены кабинетов пока не подключены.",
+        "Пилотный режим включён. Реальные ключи кабинетов хранятся только в env/хранилище.",
         reply_markup=main_menu(),
     )
+    await message.answer("Экран ассистента:", reply_markup=miniapp_keyboard())
 
 
 @router.callback_query(F.data.startswith("task:confirm:"))
@@ -141,7 +152,8 @@ async def validate_account(callback: CallbackQuery) -> None:
     except Exception:
         await callback.answer("Кабинет пока не отвечает", show_alert=True)
         await callback.message.answer(  # type: ignore[union-attr]
-            "Не получилось проверить кабинет. Проверь ключ в личном кабинете и попробуй ещё раз."
+            "Не получилось проверить кабинет. "
+            "Проверьте ключ в личном кабинете и попробуйте ещё раз."
         )
         return
     await callback.answer("Кабинет проверен")
@@ -166,8 +178,8 @@ async def sync_account(callback: CallbackQuery) -> None:
             await plan_catalog_sync_for_account(session, ctx, account_id)
         await callback.answer("План готов")
         await callback.message.answer(  # type: ignore[union-attr]
-            "Подготовил проверку обновления. "
-            "Живое обновление для этой площадки включим после проверки API."
+            "Подготовил безопасную проверку обновления. "
+            "Живое обновление включим после проверки API."
         )
     except Exception:
         await callback.answer("Не получилось обновить", show_alert=True)

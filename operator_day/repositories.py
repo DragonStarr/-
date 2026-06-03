@@ -27,10 +27,13 @@ from operator_day.models import (
     Claim,
     ClaimDeadlinePolicy,
     Feedback,
+    HealthCheck,
+    PluginManifest,
     Product,
     PvzEmployeeRecord,
     PvzPointRecord,
     Review,
+    SelfUpdateRun,
     Task,
     Tenant,
     TokenUsage,
@@ -707,6 +710,146 @@ class CatalogRepository:
         )
         await self.session.commit()
         return count
+
+
+class PluginRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def install_manifest(
+        self,
+        ctx: TenantContext,
+        *,
+        manifest: dict,
+        activate: bool = False,
+    ) -> PluginManifest:
+        await bind_tenant_scope(self.session, ctx)
+        plugin_id = str(manifest["id"])
+        existing = (
+            await self.session.execute(
+                select(PluginManifest).where(
+                    PluginManifest.tenant_id == ctx.tenant_id,
+                    PluginManifest.plugin_id == plugin_id,
+                )
+            )
+        ).scalar_one_or_none()
+        row = existing or PluginManifest(tenant_id=ctx.tenant_id, plugin_id=plugin_id)
+        row.label = str(manifest["label"])
+        row.surface = str(manifest["surface"])
+        row.module_id = str(manifest["module_id"])
+        row.action = str(manifest["action"])
+        row.requires_confirm = 1 if bool(manifest.get("requires_confirm", True)) else 0
+        row.schema = dict(manifest.get("input_schema") or {})
+        row.payload = dict(manifest)
+        row.status = "active" if activate else "draft"
+        if existing is None:
+            self.session.add(row)
+        self.session.add(
+            AuditLog(
+                tenant_id=ctx.tenant_id,
+                user_id=ctx.user_id,
+                action="plugin_manifest_installed",
+                before_after={
+                    "plugin_id": plugin_id,
+                    "status": row.status,
+                    "surface": row.surface,
+                    "module_id": row.module_id,
+                },
+            )
+        )
+        await self.session.commit()
+        return row
+
+    async def list_manifests(self, ctx: TenantContext) -> list[PluginManifest]:
+        await bind_tenant_scope(self.session, ctx)
+        rows = (
+            await self.session.execute(
+                select(PluginManifest)
+                .where(PluginManifest.tenant_id == ctx.tenant_id)
+                .order_by(PluginManifest.created_at.desc())
+            )
+        ).scalars()
+        return list(rows)
+
+
+class SelfUpdateRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def save_run(
+        self,
+        ctx: TenantContext,
+        *,
+        source: str,
+        status: str,
+        current_snapshot: str,
+        candidate_snapshot: str,
+        gates: dict,
+        payload: dict,
+    ) -> SelfUpdateRun:
+        await bind_tenant_scope(self.session, ctx)
+        row = SelfUpdateRun(
+            tenant_id=ctx.tenant_id,
+            source=source,
+            status=status,
+            current_snapshot=current_snapshot,
+            candidate_snapshot=candidate_snapshot,
+            gates=gates,
+            payload=payload,
+        )
+        self.session.add(row)
+        self.session.add(
+            AuditLog(
+                tenant_id=ctx.tenant_id,
+                user_id=ctx.user_id,
+                action="self_update_run_recorded",
+                before_after={
+                    "run_id": row.id,
+                    "source": source,
+                    "status": status,
+                    "candidate_snapshot": candidate_snapshot,
+                    "gates": gates,
+                },
+            )
+        )
+        await self.session.commit()
+        return row
+
+    async def list_runs(self, ctx: TenantContext, *, limit: int = 20) -> list[SelfUpdateRun]:
+        await bind_tenant_scope(self.session, ctx)
+        rows = (
+            await self.session.execute(
+                select(SelfUpdateRun)
+                .where(SelfUpdateRun.tenant_id == ctx.tenant_id)
+                .order_by(SelfUpdateRun.created_at.desc())
+                .limit(limit)
+            )
+        ).scalars()
+        return list(rows)
+
+
+class HealthRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def record(
+        self,
+        ctx: TenantContext,
+        *,
+        component: str,
+        status: str,
+        payload: dict,
+    ) -> None:
+        await bind_tenant_scope(self.session, ctx)
+        self.session.add(
+            HealthCheck(
+                tenant_id=ctx.tenant_id,
+                component=component,
+                status=status,
+                payload=payload,
+            )
+        )
+        await self.session.commit()
 
 
 def _iso_datetime(value) -> str:
