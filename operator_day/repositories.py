@@ -20,6 +20,12 @@ from operator_day.domain import (
     TaskStatus,
     TenantContext,
 )
+from operator_day.memory import (
+    cosine_similarity,
+    local_embedding,
+    memory_hash,
+    normalize_memory_text,
+)
 from operator_day.models import (
     Account,
     ActionExecution,
@@ -34,6 +40,7 @@ from operator_day.models import (
     PvzPointRecord,
     Review,
     SelfUpdateRun,
+    SemanticMemory,
     Task,
     Tenant,
     TokenUsage,
@@ -850,6 +857,80 @@ class HealthRepository:
             )
         )
         await self.session.commit()
+
+
+class MemoryRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def upsert_memory(
+        self,
+        ctx: TenantContext,
+        *,
+        scope: str,
+        title: str,
+        text: str,
+        payload: dict | None = None,
+        embedding_model: str | None = None,
+    ) -> SemanticMemory:
+        await bind_tenant_scope(self.session, ctx)
+        normalized = normalize_memory_text(text)
+        digest = memory_hash(normalized)
+        existing = (
+            await self.session.execute(
+                select(SemanticMemory).where(
+                    SemanticMemory.tenant_id == ctx.tenant_id,
+                    SemanticMemory.scope == scope,
+                    SemanticMemory.text_hash == digest,
+                )
+            )
+        ).scalar_one_or_none()
+        row = existing or SemanticMemory(tenant_id=ctx.tenant_id)
+        row.scope = scope
+        row.title = title
+        row.text = normalized
+        row.text_hash = digest
+        row.embedding_model = embedding_model or get_settings().embedding_model
+        row.vector = local_embedding(normalized)
+        row.payload = payload or {}
+        if existing is None:
+            self.session.add(row)
+        self.session.add(
+            AuditLog(
+                tenant_id=ctx.tenant_id,
+                user_id=ctx.user_id,
+                action="semantic_memory_saved",
+                before_after={
+                    "scope": scope,
+                    "title": title,
+                    "text_hash": digest,
+                    "embedding_model": row.embedding_model,
+                },
+            )
+        )
+        await self.session.commit()
+        return row
+
+    async def search(
+        self,
+        ctx: TenantContext,
+        *,
+        query: str,
+        scope: str | None = None,
+        limit: int = 5,
+    ) -> list[tuple[SemanticMemory, float]]:
+        await bind_tenant_scope(self.session, ctx)
+        db_query = select(SemanticMemory).where(SemanticMemory.tenant_id == ctx.tenant_id)
+        if scope:
+            db_query = db_query.where(SemanticMemory.scope == scope)
+        rows = (await self.session.execute(db_query)).scalars().all()
+        query_vector = local_embedding(query)
+        ranked = [
+            (row, cosine_similarity(list(row.vector or []), query_vector))
+            for row in rows
+        ]
+        ranked.sort(key=lambda item: item[1], reverse=True)
+        return ranked[:limit]
 
 
 def _iso_datetime(value) -> str:

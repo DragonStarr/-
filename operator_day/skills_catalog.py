@@ -24,7 +24,7 @@ PLUGIN_CONTRACTS = {
     "ozon_performance_api": (ModuleId.ADS,),
     "yandex_market_partner_api": (ModuleId.ACCOUNTS, ModuleId.FINANCE),
     "telegram_bot_api": (ModuleId.MORNING, ModuleId.REVIEWS),
-    "freemodel_opus_router": (ModuleId.REVIEWS, ModuleId.SUPERVISOR),
+    "external_llm_accelerator": (ModuleId.REVIEWS, ModuleId.SUPERVISOR),
     "pvz_shift_engine": (ModuleId.PVZ, ModuleId.ACCOUNTING),
 }
 

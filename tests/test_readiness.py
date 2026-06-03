@@ -14,7 +14,7 @@ async def test_readiness_reports_modules_capabilities_and_blockers() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["moduleCount"] == 22
+    assert body["moduleCount"] == 23
     assert body["skillsAndPlugins"] >= 30
     assert body["checksPerAction"] == 10
     assert body["status"] == "ready_for_replay_pilot"

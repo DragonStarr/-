@@ -248,6 +248,30 @@ class PluginManifestOut(BaseModel):
     input_schema: dict[str, Any] = Field(alias="inputSchema")
 
 
+class MemoryIn(BaseModel):
+    scope: str = Field(min_length=2, max_length=120)
+    title: str = Field(default="", max_length=300)
+    text: str = Field(min_length=1, max_length=8000)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryOut(BaseModel):
+    memory_id: str = Field(alias="memoryId")
+    scope: str
+    title: str
+    text: str
+    text_hash: str = Field(alias="textHash")
+    embedding_model: str = Field(alias="embeddingModel")
+    score: float = 1
+    payload: dict[str, Any]
+
+
+class MemorySearchIn(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+    scope: str | None = Field(default=None, max_length=120)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
 class SelfUpdatePlanIn(BaseModel):
     source: str = Field(min_length=10, max_length=500)
     current_snapshot: str = Field(default="vendor/_snapshots/current", alias="currentSnapshot")

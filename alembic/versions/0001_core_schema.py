@@ -267,6 +267,19 @@ def upgrade() -> None:
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
+    op.create_table(
+        "semantic_memory",
+        sa.Column("id", sa.String(64), primary_key=True),
+        sa.Column("tenant_id", sa.String(64), nullable=False, index=True),
+        sa.Column("scope", sa.String(120), nullable=False, index=True),
+        sa.Column("title", sa.String(300), nullable=False, server_default=""),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("text_hash", sa.String(64), nullable=False, index=True),
+        sa.Column("embedding_model", sa.String(120), nullable=False, server_default="bge-m3-local"),
+        sa.Column("vector", sa.JSON(), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
     for table in (
         "users",
         "accounts",
@@ -316,6 +329,7 @@ def upgrade() -> None:
         "plugin_manifests",
         "self_update_runs",
         "health_checks",
+        "semantic_memory",
     ):
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(
@@ -330,6 +344,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     for table in (
         "whitehat_tips",
+        "semantic_memory",
         "health_checks",
         "self_update_runs",
         "plugin_manifests",

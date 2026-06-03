@@ -4,7 +4,7 @@
 
 ## Главный вывод
 
-Проект ведем как 23-модульный backend-first бот: M1-M18 из старого ТЗ, M19 реклама, M20 претензии, M21 ниши, M22 контент через внешние сервисы, M23 защита аккаунта. Фронт и Mini App пока не делаем.
+Проект ведем как 23-модульный автономный продукт: M1-M18 из старого ТЗ, M19 реклама, M20 претензии, M21 ниши, M22 контент через внешние сервисы, M23 защита аккаунта. Поставка включает backend/API, Telegram-бота, Next.js Mini App/PWA, локальный LLM-шлюз, семантическую память, self-update контур, CI, backup/restore и инфраструктуру.
 
 ## Принято в реализацию
 
@@ -39,10 +39,10 @@
 - Добавлен `/api/pvz/import` и DB-backed M11: точки и сотрудники берутся из `pvz_points`/`pvz_employees`, график 2/2 и payroll считаются по индивидуальным ставкам, оператор ПВЗ не может менять штат.
 - Внешние `pointId`/`employeeId` из ПВЗ-импорта не используются как глобальные primary key: внутри БД они scoped по tenant/point hash, а наружу и в задачи возвращается исходный ID. Это защищает пилот от конфликта двух владельцев с одинаковыми ID из своих ЛК/таблиц.
 - Добавлен owner-only `/api/brain/architecture-review`: LLM проверяет дерево ЛК/API -> transport -> workers -> БД -> orchestrator -> Telegram.
-- Добавлен owner-only `/api/brain/architecture-gate`: backend отдает machine-readable topology по ЛК/API, серверам, workers, БД, коннекторам и readiness gates; live Opus 4.8 прогон запускается только при `?live=true`, `FREEMODEL_API_KEY` и `LLM_SMOKE_ENABLED=true`, иначе возвращается `needs_work` blocker без расхода токенов.
-- LLM router ходит в FreeModel Responses API `https://api.freemodel.dev/v1/responses` и сверяет фактически возвращенный `model`: если при запросе `claude-opus-4-8` провайдер вернул другой model id, это fallback, а не успешный Opus gate.
-- Readiness учитывает `llm_architecture_gate`: live-пилот не считается готовым, пока успешный live Opus gate не записан в `audit_log` как `architecture_gate_passed`.
-- Добавлен owner-only `/api/brain/llm-status`: Opus 4.8 проверяется без раскрытия ключа; live model-list smoke запускается только при `LLM_SMOKE_ENABLED=true`, чтобы не тратить лимит случайным открытием endpoint.
+- Добавлен owner-only `/api/brain/architecture-gate`: backend отдает machine-readable topology по ЛК/API, серверам, workers, БД, коннекторам и readiness gates; локальный LLM является базовым ревьюером, внешний провайдер запускается только при `?live=true`, ключе в env и `LLM_SMOKE_ENABLED=true`, иначе возвращается безопасный offline/fallback результат без расхода токенов.
+- LLM router работает через локальный/offline режим и OpenAI-compatible внешний endpoint из env; он сверяет фактически возвращенный `model/provider`, чтобы подмена модели не считалась успешным live gate.
+- Readiness учитывает `llm_architecture_gate`: live-пилот не считается готовым, пока успешный architecture gate не записан в `audit_log` как `architecture_gate_passed`.
+- Добавлен owner-only `/api/brain/llm-status`: доступность модели проверяется без раскрытия ключа; live model-list smoke запускается только при `LLM_SMOKE_ENABLED=true`, чтобы не тратить лимит случайным открытием endpoint.
 - Добавлен `bind_tenant_scope`: PostgreSQL-сессия выставляет `app.tenant_id` перед tenant-bound операциями, чтобы RLS политики работали не только в миграции.
 - Исправлена схема: `stocks` получил `tenant_id`; Alembic initial schema теперь покрывает все ORM tables, включая `reviews`, `audit_log`, `action_executions`, `claim_deadline_policies`.
 - Добавлен production guard: `APP_ENV=production` не стартует без `TOKEN_ENCRYPTION_KEY`.

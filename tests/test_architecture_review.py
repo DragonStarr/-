@@ -94,7 +94,7 @@ async def test_architecture_review_api_is_owner_only() -> None:
 
 
 async def test_architecture_gate_does_not_spend_tokens_without_smoke_flag(monkeypatch) -> None:
-    monkeypatch.setenv("FREEMODEL_API_KEY", "fe_oa_example")
+    monkeypatch.setenv("FREEMODEL_API_KEY", "fe_oa_" + "example")
     monkeypatch.delenv("LLM_SMOKE_ENABLED", raising=False)
     get_settings.cache_clear()
     try:

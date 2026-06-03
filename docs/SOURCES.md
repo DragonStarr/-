@@ -17,8 +17,10 @@
 - Yandex Market bids API: https://yandex.ru/dev/market/partner-api/doc/ru/reference/bids/getBidsInfoForCampaign
 - Official Yandex Market Partner API repo: https://github.com/yandex-market/yandex-market-partner-api
 - pgvector repository and HNSW/halfvec reference: https://github.com/pgvector/pgvector
-- Claude Opus 4.8 API model id: https://www.anthropic.com/claude/opus
-- FreeModel OpenAI-compatible model list: https://freemodel.dev/v1/models
+- Next.js App Router manifest/rewrite documentation: https://nextjs.org/docs/app/api-reference/file-conventions/metadata/manifest
+- Telegram UI React components: https://github.com/Telegram-Mini-Apps/TelegramUI
+- Telegram Mini Apps SDK/tooling: https://github.com/Telegram-Mini-Apps/telegram-apps
+- FreeModel/OpenAI-compatible model list: https://freemodel.dev/v1/models
 
 ## GitHub checks used for recommendations
 
@@ -42,7 +44,7 @@
 
 - Crypto wallets: preview before confirmation, one primary action, balance/risk shown before action.
 - Task apps: short task list, visible status, one next step, clear done/approved state.
-- Telegram bot constraints: no frontend in MVP; all navigation is reply keyboard + inline buttons.
+- Telegram bot constraints: the bot remains button-first; Mini App mirrors the same actions with bottom navigation and plain Russian labels.
 
 ## 2026-06-03 notebook verification
 

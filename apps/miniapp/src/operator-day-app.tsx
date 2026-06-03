@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
   Boxes,
@@ -15,7 +16,6 @@ import {
   WalletCards,
   type LucideIcon
 } from "lucide-react";
-import "./styles.css";
 import { confirmTask, getAccounts, getMorningTasks, getPlugins, getReadiness } from "./api";
 import type { AccountCapability, PluginManifest, Readiness, Task } from "./types";
 
@@ -29,7 +29,7 @@ const tabs: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
   { id: "settings", label: "Ещё", icon: Settings }
 ];
 
-function App() {
+export function OperatorDayApp() {
   const [tab, setTab] = useState<Tab>("tasks");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<AccountCapability[]>([]);
@@ -37,6 +37,9 @@ function App() {
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState("Собираю дела");
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+
+  useTelegramChrome();
 
   useEffect(() => {
     let mounted = true;
@@ -79,9 +82,10 @@ function App() {
 
   async function handleConfirm(task: Task) {
     setNotice("Делаю");
+    setPreviewTask(null);
     try {
-      const result = await confirmTask(task.taskId);
-      setNotice(result.text || "Готово");
+      await confirmTask(task.taskId);
+      setNotice("Записано");
       setTasks((rows) =>
         rows.map((item) => (item.taskId === task.taskId ? { ...item, status: "done" } : item))
       );
@@ -108,22 +112,22 @@ function App() {
         <div>
           <p className="eyeless">Сегодня</p>
           <strong>{tasks.length || 5} дел</strong>
-          <span>которые стоит закрыть первыми</span>
+          <span>закрыть первыми</span>
         </div>
         <div>
           <p className="eyeless">Эффект</p>
           <strong>{formatMoney(money || 18400)}</strong>
-          <span>по безопасным действиям</span>
+          <span>по действиям</span>
         </div>
         <div>
-          <p className="eyeless">Внимание</p>
+          <p className="eyeless">ОК</p>
           <strong>{urgent || 2}</strong>
-          <span>нужно подтвердить</span>
+          <span>подтвердить</span>
         </div>
       </section>
 
       <section className="content">
-        {tab === "tasks" && <TaskList tasks={tasks} onConfirm={handleConfirm} />}
+        {tab === "tasks" && <TaskList tasks={tasks} onConfirm={setPreviewTask} />}
         {tab === "accounts" && <Accounts accounts={accounts} />}
         {tab === "finance" && <Finance tasks={tasks} />}
         {tab === "pvz" && <Pvz tasks={tasks} />}
@@ -149,8 +153,26 @@ function App() {
           );
         })}
       </nav>
+
+      {previewTask && (
+        <ActionPreview
+          task={previewTask}
+          onClose={() => setPreviewTask(null)}
+          onConfirm={() => void handleConfirm(previewTask)}
+        />
+      )}
     </main>
   );
+}
+
+function useTelegramChrome() {
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    tg?.ready?.();
+    tg?.expand?.();
+    tg?.setHeaderColor?.("#eef3ef");
+    tg?.setBackgroundColor?.("#eef3ef");
+  }, []);
 }
 
 function Logo() {
@@ -176,7 +198,7 @@ function TaskList({ tasks, onConfirm }: { tasks: Task[]; onConfirm: (task: Task)
           <div className="task-body">
             <div className="row-head">
               <h2>{task.title}</h2>
-              <span>{task.confidence < 0.5 ? "проверить" : "можно делать"}</span>
+              <span>{task.confidence < 0.5 ? "проверить" : "можно"}</span>
             </div>
             <p>{task.shortText}</p>
             <div className="mini-stats">
@@ -184,11 +206,51 @@ function TaskList({ tasks, onConfirm }: { tasks: Task[]; onConfirm: (task: Task)
               <span>{task.actionLabel}</span>
             </div>
           </div>
-          <button className="round-action" onClick={() => onConfirm(task)} type="button">
+          <button
+            aria-label={task.actionLabel}
+            className="round-action"
+            onClick={() => onConfirm(task)}
+            type="button"
+          >
             {task.status === "done" ? <Check size={20} /> : <Sparkles size={20} />}
           </button>
         </article>
       ))}
+    </div>
+  );
+}
+
+function ActionPreview({
+  task,
+  onClose,
+  onConfirm
+}: {
+  task: Task;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="preview-layer" role="presentation">
+      <section aria-modal="true" className="preview-sheet" role="dialog">
+        <div className="row-head">
+          <h2>{task.actionLabel}</h2>
+          <span>{task.risk === "safe" ? "безопасно" : "нужен ОК"}</span>
+        </div>
+        <p>{task.shortText}</p>
+        <div className="proof-grid">
+          <MiniProof label="Эффект" value={formatMoney(task.moneyEffect)} />
+          <MiniProof label="Уверен" value={`${Math.round(task.confidence * 100)}%`} />
+          <MiniProof label="Модуль" value={task.moduleId.split("_")[0]} />
+        </div>
+        <div className="preview-actions">
+          <button className="secondary-action" onClick={onClose} type="button">
+            Отмена
+          </button>
+          <button className="primary-action" onClick={onConfirm} type="button">
+            Сделать
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -198,7 +260,7 @@ function Accounts({ accounts }: { accounts: AccountCapability[] }) {
     return (
       <EmptyState
         icon={<Plug size={34} />}
-        title="Кабинеты ждут подключения"
+        title="Кабинеты ждут"
         text="После подключения я буду брать реальные товары, отзывы, деньги и претензии."
       />
     );
@@ -225,14 +287,18 @@ function Accounts({ accounts }: { accounts: AccountCapability[] }) {
 }
 
 function Finance({ tasks }: { tasks: Task[] }) {
-  const rows = tasks.filter((task) => task.moduleId.includes("FINANCE") || task.moduleId.includes("CLAIMS"));
+  const rows = tasks.filter(
+    (task) => task.moduleId.includes("FINANCE") || task.moduleId.includes("CLAIMS")
+  );
   return (
     <div className="stack">
       <section className="money-panel">
         <WalletCards size={28} />
         <div>
           <span>Деньги под контролем</span>
-          <strong>{formatMoney(rows.reduce((sum, task) => sum + Math.max(0, task.moneyEffect), 0) || 9200)}</strong>
+          <strong>
+            {formatMoney(rows.reduce((sum, task) => sum + Math.max(0, task.moneyEffect), 0) || 9200)}
+          </strong>
         </div>
       </section>
       <TaskList tasks={rows.length ? rows : demoTasks.slice(0, 2)} onConfirm={() => undefined} />
@@ -272,9 +338,7 @@ function SettingsView({
           <h2>Кнопки</h2>
           <span>{plugins.length ? `${plugins.length} шт.` : "можно добавить"}</span>
         </div>
-        <p className="plain">
-          Новые кнопки добавляются по манифесту. Код от пользователя не запускается.
-        </p>
+        <p className="plain">Новые кнопки добавляются по манифесту. Код пользователя не запускается.</p>
       </article>
       <article className="soft-panel safe">
         <ShieldCheck size={24} />
@@ -398,7 +462,7 @@ const demoTasks: Task[] = [
   },
   {
     taskId: "demo-stock",
-    moduleId: "M10_STOCKS",
+    moduleId: "M10_FORECAST",
     title: "Пополнить остатки",
     shortText: "На складе осталось на 5 дней. Подготовил безопасную поставку.",
     actionLabel: "Показать",
@@ -412,5 +476,3 @@ const demoTasks: Task[] = [
     payload: {}
   }
 ];
-
-createRoot(document.getElementById("root")!).render(<App />);

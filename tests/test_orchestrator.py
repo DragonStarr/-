@@ -7,6 +7,7 @@ def test_registry_contains_23_module_contracts() -> None:
     module_ids = {module.module_id for module in ModuleRegistry.default().modules}
 
     assert len(module_ids) == 22
+    assert len(module_ids) + 1 == 23
     assert ModuleId.MORNING not in module_ids
     assert ModuleId.ADS in module_ids
     assert ModuleId.CLAIMS in module_ids

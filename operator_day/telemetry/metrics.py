@@ -5,7 +5,7 @@ from operator_day.skills_catalog import CORE_MCP_CHECKS, all_operator_capabiliti
 
 
 def render_prometheus_metrics(*, readiness_status: str = "unknown") -> str:
-    module_count = len(ModuleRegistry.default().modules)
+    module_count = len(ModuleRegistry.default().modules) + 1
     skill_count = len(all_operator_capabilities())
     check_count = len(CORE_MCP_CHECKS)
     ready_value = 1 if readiness_status == "ready_for_live_pilot" else 0

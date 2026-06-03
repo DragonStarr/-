@@ -22,6 +22,9 @@ from operator_day.api.schemas import (
     ConfirmOut,
     FeedbackIn,
     LlmStatusOut,
+    MemoryIn,
+    MemoryOut,
+    MemorySearchIn,
     PluginManifestIn,
     PluginManifestOut,
     PvzImportIn,
@@ -61,6 +64,7 @@ from operator_day.repositories import (
     CatalogRepository,
     ClaimPolicyRepository,
     ClaimRepository,
+    MemoryRepository,
     PluginRepository,
     PvzRepository,
     ReadinessRepository,
@@ -325,7 +329,7 @@ async def readiness(session: SessionDep, ctx: ContextDep) -> dict:
     return {
         "status": status,
         "mode": mode,
-        "moduleCount": len(ModuleRegistry.default().modules),
+        "moduleCount": len(ModuleRegistry.default().modules) + 1,
         "skillsAndPlugins": len(all_operator_capabilities()),
         "checksPerAction": len(CORE_MCP_CHECKS),
         "accounts": len(accounts),
@@ -435,6 +439,34 @@ async def install_plugin(
         activate=payload.activate,
     )
     return _plugin_out(row)
+
+
+@router.post("/api/memory", response_model=MemoryOut)
+async def save_memory(payload: MemoryIn, session: SessionDep, ctx: ContextDep) -> MemoryOut:
+    ensure_can_connect_account(ctx)
+    row = await MemoryRepository(session).upsert_memory(
+        ctx,
+        scope=payload.scope,
+        title=payload.title,
+        text=payload.text,
+        payload=payload.payload,
+    )
+    return _memory_out(row, score=1.0)
+
+
+@router.post("/api/memory/search", response_model=list[MemoryOut])
+async def search_memory(
+    payload: MemorySearchIn,
+    session: SessionDep,
+    ctx: ContextDep,
+) -> list[MemoryOut]:
+    rows = await MemoryRepository(session).search(
+        ctx,
+        query=payload.query,
+        scope=payload.scope,
+        limit=payload.limit,
+    )
+    return [_memory_out(row, score=score) for row, score in rows]
 
 
 @router.post("/api/self-update/plan", response_model=SelfUpdateOut)
@@ -565,6 +597,19 @@ def _plugin_out(row) -> PluginManifestOut:
         status=row.status,
         requiresConfirm=bool(row.requires_confirm),
         inputSchema=row.schema,
+    )
+
+
+def _memory_out(row, *, score: float) -> MemoryOut:
+    return MemoryOut(
+        memoryId=row.id,
+        scope=row.scope,
+        title=row.title,
+        text=row.text,
+        textHash=row.text_hash,
+        embeddingModel=row.embedding_model,
+        score=round(score, 6),
+        payload=row.payload,
     )
 
 

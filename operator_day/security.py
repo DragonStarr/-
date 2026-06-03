@@ -12,6 +12,9 @@ SECRET_PATTERNS = [
     re.compile(r"github_pat_[a-zA-Z0-9_]+"),
     re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}\b"),
     re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['\"]?[^'\"\s]+"),
+    re.compile(
+        r"(?i)(api\s*ключ|апи\s*ключ|ключ\s*api|токен|секрет|пароль)\s*[:=]\s*['\"]?[^'\"\s]+"
+    ),
 ]
 
 PROMPT_INJECTION_PATTERNS = [

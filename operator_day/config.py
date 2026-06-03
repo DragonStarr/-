@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     freemodel_model: str = "gpt-5.4"
     llm_daily_token_budget: int = 200_000
     llm_smoke_enabled: bool = False
+    embedding_provider: str = "local"
+    embedding_model: str = "bge-m3"
+    embedding_vector_size: int = 1024
     miniapp_public_url: str = "http://localhost:5173"
     enable_metrics: bool = True
 

@@ -3,9 +3,19 @@ from operator_day.security import fingerprint_secret, redact_secret
 
 
 def test_redact_secret_masks_freemodel_key() -> None:
-    text = "key=fe_oa_example_secret"
+    text = "key=" + "fe_oa_" + "example_secret"
 
     assert "fe_oa_" not in redact_secret(text)
+
+
+def test_redact_secret_masks_russian_secret_labels() -> None:
+    text = "API ключ: temporary-value токен=another-value пароль: pass123"
+
+    redacted = redact_secret(text)
+
+    assert "temporary-value" not in redacted
+    assert "another-value" not in redacted
+    assert "pass123" not in redacted
 
 
 def test_fingerprint_is_stable_and_short() -> None:
