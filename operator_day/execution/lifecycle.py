@@ -8,7 +8,9 @@ from operator_day.domain import ActionRisk, TaskAction, TaskStatus
 
 def action_lifecycle(task: TaskAction, audit_event: dict[str, Any]) -> dict[str, Any]:
     marketplace = audit_event.get("marketplace_operation") or {}
-    if task.risk == ActionRisk.HUMAN or task.status == TaskStatus.ESCALATED:
+    if task.status == TaskStatus.FAILED:
+        execution_stage = "not_executable_yet"
+    elif task.risk == ActionRisk.HUMAN or task.status == TaskStatus.ESCALATED:
         execution_stage = "human_escalated"
     elif marketplace.get("live") is True:
         execution_stage = "marketplace_executed"
@@ -25,7 +27,11 @@ def action_lifecycle(task: TaskAction, audit_event: dict[str, Any]) -> dict[str,
         "stages": [
             {"name": "collected", "status": "pass", "at": task.created_at.isoformat()},
             {"name": "confirmed", "status": "pass", "at": now},
-            {"name": execution_stage, "status": "pass", "at": now},
+            {
+                "name": execution_stage,
+                "status": "blocked" if task.status == TaskStatus.FAILED else "pass",
+                "at": now,
+            },
             {"name": "audited", "status": "pending_write", "at": now},
         ],
         "rollback": rollback_hint(task, marketplace),
@@ -38,6 +44,8 @@ def rollback_hint(task: TaskAction, marketplace: dict[str, Any]) -> dict[str, st
             "mode": "compensating_action_required",
             "reason": "live marketplace write was executed",
         }
+    if task.status == TaskStatus.FAILED:
+        return {"mode": "none", "reason": "no automatic executor is registered"}
     if task.risk == ActionRisk.HUMAN:
         return {"mode": "none", "reason": "action was escalated, not executed"}
     return {"mode": "discard_plan", "reason": "only a dry-run or local plan exists"}

@@ -947,51 +947,53 @@ function ActionPreview({
   const checks = checkList(task);
   return (
     <div className="preview-layer" role="presentation">
-      <section aria-modal="true" className="preview-sheet" role="dialog">
-        <div className="sheet-handle" aria-hidden="true" />
-        <h2>{task.actionLabel || "Сделать"}</h2>
-        <div className="sheet-proof-list">
-          <ProofRow
-            icon={FileText}
-            label="Что будет сделано"
-            value={cleanText(task.shortText)}
-          />
-          <ProofRow
-            icon={Database}
-            label="Откуда данные"
-            value={sources.join(" • ")}
-          />
-          <ProofRow
-            icon={ShieldCheck}
-            label="Проверки"
-            value={`${checks.slice(0, 4).join(", ")} — все проверки пройдены`}
-            accent
-          />
-        </div>
-        <div className="proof-grid">
-          <MiniProof label="эффект" value={formatMoney(task.moneyEffect)} />
-          <MiniProof label="уверен" value={`${Math.round(task.confidence * 100)}%`} />
-          <MiniProof label="проверок" value={String(checks.length)} />
-        </div>
-        <details className="source-card">
-          <summary>На основе чего</summary>
-          <ul>
-            {sources.map((source) => (
-              <li key={source}>{source}</li>
-            ))}
-          </ul>
-        </details>
-        <details className="source-card">
-          <summary>Что проверено</summary>
-          <ul>
-            {checks.map((check) => (
-              <li key={check}>{check}</li>
-            ))}
-          </ul>
-        </details>
-        <div className="safety-line">
-          <LockKeyhole size={16} />
-          <span>Деньги, цены и ставки меняются только после этого подтверждения.</span>
+      <section aria-modal="true" className="preview-sheet action-sheet" role="dialog">
+        <div className="preview-content">
+          <div className="sheet-handle" aria-hidden="true" />
+          <h2>{task.actionLabel || "Сделать"}</h2>
+          <div className="sheet-proof-list">
+            <ProofRow
+              icon={FileText}
+              label="Что будет сделано"
+              value={cleanText(task.shortText)}
+            />
+            <ProofRow
+              icon={Database}
+              label="Откуда данные"
+              value={sources.join(" • ")}
+            />
+            <ProofRow
+              icon={ShieldCheck}
+              label="Проверки"
+              value={`${checks.slice(0, 4).join(", ")} — все проверки пройдены`}
+              accent
+            />
+          </div>
+          <div className="proof-grid">
+            <MiniProof label="эффект" value={formatMoney(task.moneyEffect)} />
+            <MiniProof label="уверен" value={`${Math.round(task.confidence * 100)}%`} />
+            <MiniProof label="проверок" value={String(checks.length)} />
+          </div>
+          <details className="source-card">
+            <summary>На основе чего</summary>
+            <ul>
+              {sources.map((source) => (
+                <li key={source}>{source}</li>
+              ))}
+            </ul>
+          </details>
+          <details className="source-card">
+            <summary>Что проверено</summary>
+            <ul>
+              {checks.map((check) => (
+                <li key={check}>{check}</li>
+              ))}
+            </ul>
+          </details>
+          <div className="safety-line">
+            <LockKeyhole size={16} />
+            <span>Деньги, цены и ставки меняются только после этого подтверждения.</span>
+          </div>
         </div>
         {result && (
           <div className="result-box">

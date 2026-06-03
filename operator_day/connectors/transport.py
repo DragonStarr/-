@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -10,7 +11,11 @@ from urllib.parse import quote
 import httpx
 
 from operator_day.connectors.catalog import operation_catalog
-from operator_day.connectors.safety import MarketplaceOperation, ensure_operation_allowed
+from operator_day.connectors.safety import (
+    MarketplaceOperation,
+    OperationSafety,
+    ensure_operation_allowed,
+)
 from operator_day.security import redact_secret
 
 SleepFn = Callable[[float], Awaitable[None]]
@@ -38,6 +43,12 @@ class MarketplaceCredentials:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class _RateBucket:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    next_at: float = 0.0
+
+
 class MarketplaceTransport:
     def __init__(
         self,
@@ -52,6 +63,7 @@ class MarketplaceTransport:
         self.sleep = sleep
         self.max_attempts = max_attempts
         self.operations = operation_catalog()
+        self._rate_buckets: dict[str, _RateBucket] = {}
 
     async def call_operation(
         self,
@@ -61,6 +73,7 @@ class MarketplaceTransport:
         confirm_write: bool = False,
         confirm_destructive: bool = False,
         dry_run: bool = False,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         operation = self.operations[operation_id]
         if not dry_run:
@@ -80,9 +93,13 @@ class MarketplaceTransport:
                 "safety": operation.safety.value,
                 "rateLimitKey": operation.rate_limit_key,
                 "subscriptionTier": operation.subscription_tier,
+                "idempotencyKey": idempotency_key,
                 "payload": request_payload,
             }
         headers = self._headers(operation.platform)
+        if operation.safety != OperationSafety.READ and idempotency_key:
+            headers["X-Idempotency-Key"] = idempotency_key
+        await self._respect_rate_limit(operation.rate_limit_key)
         async with httpx.AsyncClient(
             transport=self.http_transport,
             timeout=30,
@@ -91,7 +108,12 @@ class MarketplaceTransport:
                 response = await self._send(client, operation.method, url, headers, request_payload)
                 if response.status_code < 400:
                     return response.json()
-                if not self._should_retry(response.status_code) or attempt == self.max_attempts:
+                retry_allowed = operation.safety == OperationSafety.READ or bool(idempotency_key)
+                if (
+                    not retry_allowed
+                    or not self._should_retry(response.status_code)
+                    or attempt == self.max_attempts
+                ):
                     raise self._error(operation_id, response)
                 await self.sleep(self._retry_delay(response, attempt))
         raise MarketplaceApiError(f"{operation_id}: unexpected transport state")
@@ -181,3 +203,15 @@ class MarketplaceTransport:
             endpoint = endpoint.replace("{" + name + "}", quote(str(raw_value), safe=""))
         base_url = operation.base_url or _BASE_URLS[operation.platform]
         return f"{base_url}{endpoint}", request_payload
+
+    async def _respect_rate_limit(self, rate_limit_key: str) -> None:
+        if not rate_limit_key:
+            return
+        bucket = self._rate_buckets.setdefault(rate_limit_key, _RateBucket())
+        async with bucket.lock:
+            now = time.monotonic()
+            delay = bucket.next_at - now
+            if delay > 0:
+                await self.sleep(delay)
+                now = time.monotonic()
+            bucket.next_at = max(bucket.next_at, now) + 0.05

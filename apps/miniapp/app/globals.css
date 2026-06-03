@@ -1044,6 +1044,7 @@ button {
   max-height: min(86svh, 760px);
   padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
   overflow-y: auto;
+  overscroll-behavior: contain;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
     rgba(13, 15, 18, 0.98);
@@ -1197,11 +1198,40 @@ button {
   color: var(--lime);
 }
 
+.action-sheet > .result-box {
+  flex-shrink: 0;
+}
+
 .preview-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: 14px;
+  padding-top: 10px;
+  background: linear-gradient(180deg, rgba(13, 15, 18, 0), rgba(13, 15, 18, 0.98) 28%);
+}
+
+.action-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-content {
+  min-height: 0;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.action-sheet .preview-actions {
+  position: relative;
+  bottom: auto;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(13, 15, 18, 0.4), rgba(13, 15, 18, 0.98) 34%);
 }
 
 .primary-action,
@@ -1386,8 +1416,7 @@ button {
   .feedback-row,
   .insight-grid,
   .pvz-grid,
-  .proof-grid,
-  .preview-actions {
+  .proof-grid {
     grid-template-columns: 1fr;
   }
 

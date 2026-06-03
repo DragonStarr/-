@@ -175,12 +175,14 @@ class ReplayHub:
         payload: dict[str, Any],
         *,
         platform: Platform,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         credentials = MarketplaceCredentials(platform=platform.value, api_key="")
         planned = await MarketplaceTransport(credentials).call_operation(
             operation_id,
             payload,
             dry_run=True,
+            idempotency_key=idempotency_key,
         )
         return {
             "mode": "schema_dry_run",
@@ -338,6 +340,7 @@ class DatabaseReplayHub(ReplayHub):
         payload: dict[str, Any],
         *,
         platform: Platform,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         await bind_tenant_scope(self.session, self.ctx)
         account = (
@@ -354,6 +357,7 @@ class DatabaseReplayHub(ReplayHub):
                 operation_id,
                 payload,
                 platform=platform,
+                idempotency_key=idempotency_key,
             )
         credentials = await AccountRepository(self.session).credentials_for_account(
             self.ctx,
@@ -364,22 +368,30 @@ class DatabaseReplayHub(ReplayHub):
         compatible_live_platforms = {platform.value}
         if platform == Platform.YANDEX:
             compatible_live_platforms.add("yandex_market")
+        capability_name = _capability_for_operation(operation_id)
+        connected = AccountRepository._to_connected(account)
+        capability_status = connected.capabilities.get(capability_name, "needs_api_verification")
         live_allowed = (
             live_requested
             and account.status == "validated"
             and operation.platform in compatible_live_platforms
+            and capability_status == "ready"
         )
         transport_result = await transport.call_operation(
             operation_id,
             payload,
             confirm_write=live_allowed,
             dry_run=not live_allowed,
+            idempotency_key=idempotency_key
+            or f"{self.ctx.tenant_id}:{account.id}:{operation_id}",
         )
         return {
             "mode": "live" if live_allowed else "tenant_dry_run",
             "status": "executed" if live_allowed else "planned",
             "live": live_allowed,
             "account_id": account.id,
+            "write_capability": capability_name,
+            "write_capability_status": capability_status,
             "planned_operation": None if live_allowed else transport_result,
             "response": transport_result if live_allowed else None,
         }
@@ -390,6 +402,16 @@ def _platform_from_category(value: str) -> Platform:
         return Platform(value)
     except ValueError:
         return Platform.OZON
+
+
+def _capability_for_operation(operation_id: str) -> str:
+    if "Review" in operation_id or "Questions" in operation_id:
+        return "reviews"
+    if "Campaign" in operation_id or "Bids" in operation_id or "Promotion" in operation_id:
+        return "ads"
+    if "Price" in operation_id or "Product" in operation_id or "Content" in operation_id:
+        return "catalog"
+    return "catalog"
 
 
 def _claim_candidate_from_row(row: Claim) -> ClaimCandidate:

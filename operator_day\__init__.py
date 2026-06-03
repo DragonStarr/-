@@ -1,1 +1,0 @@
-"""Operator Day backend package."""

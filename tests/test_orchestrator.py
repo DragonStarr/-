@@ -1,5 +1,5 @@
 from operator_day.brain.orchestrator import MorningOrchestrator
-from operator_day.domain import ActionRisk, ModuleId, Role, TenantContext
+from operator_day.domain import ActionRisk, ModuleId, Role, TaskStatus, TenantContext
 from operator_day.modules.implementations import ModuleRegistry
 
 
@@ -83,3 +83,16 @@ async def test_reprice_confirmation_builds_marketplace_price_plan() -> None:
     assert result.audit_event["action"] == "price_update_planned"
     assert result.audit_event["target_price"] >= task.payload["hard_floor"]
     assert result.audit_event["marketplace_operation"]["planned_operation"]["dryRun"] is True
+
+
+async def test_module_without_executor_is_not_marked_done() -> None:
+    ctx = TenantContext(tenant_id="t1", user_id="u1", role=Role.OWNER)
+    orchestrator = MorningOrchestrator()
+    tasks = await orchestrator.collect_all(ctx)
+    task = next(item for item in tasks if item.module_id == ModuleId.SUPPLIES)
+
+    result = await orchestrator.execute_prepared(ctx, task)
+
+    assert result.status == TaskStatus.FAILED
+    assert result.audit_event["connector_status"] == "not_executable_yet"
+    assert result.audit_event["execution_lifecycle"]["stages"][2]["name"] == "not_executable_yet"

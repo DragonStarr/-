@@ -241,6 +241,7 @@ class ReviewsModule(OperatorModule):
             operation_id,
             operation_payload,
             platform=review.platform,
+            idempotency_key=f"{task.task_id}:{operation_id}",
         )
         return ActionResult(
             task_id=task.task_id,
@@ -338,6 +339,7 @@ class RepricerModule(OperatorModule):
             operation_id,
             payload,
             platform=platform,
+            idempotency_key=f"{task.task_id}:{operation_id}",
         )
         return ActionResult(
             task_id=task.task_id,
@@ -641,6 +643,7 @@ class AdsModule(OperatorModule):
             operation_id,
             payload,
             platform=platform,
+            idempotency_key=f"{task.task_id}:{operation_id}",
         )
         return ActionResult(
             task_id=task.task_id,
@@ -819,6 +822,7 @@ class AccountGuardModule(OperatorModule):
             "Campaign_Stop",
             {"campaign_id": str(task.payload.get("campaign_id") or "dry-run-campaign")},
             platform=Platform.OZON,
+            idempotency_key=f"{task.task_id}:Campaign_Stop",
         )
         return ActionResult(
             task_id=task.task_id,

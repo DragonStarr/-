@@ -3,6 +3,7 @@ from __future__ import annotations
 from operator_day.connectors.replay import ReplayHub
 from operator_day.domain import ActionResult, ActionRisk, TaskAction, TaskStatus, TenantContext
 from operator_day.execution.lifecycle import action_lifecycle
+from operator_day.modules.base import OperatorModule
 from operator_day.modules.implementations import ModuleRegistry
 
 
@@ -43,9 +44,16 @@ class MorningOrchestrator:
         return await self.execute_prepared(ctx, task)
 
     async def execute_prepared(self, ctx: TenantContext, task: TaskAction) -> ActionResult:
-        task.status = TaskStatus.ESCALATED if task.risk == ActionRisk.HUMAN else TaskStatus.DONE
         module = next(item for item in self.registry.modules if item.module_id == task.module_id)
+        task.status = (
+            TaskStatus.FAILED
+            if module.__class__.execute is OperatorModule.execute
+            else TaskStatus.ESCALATED
+            if task.risk == ActionRisk.HUMAN
+            else TaskStatus.DONE
+        )
         result = await module.execute(ctx, task, self.replay)
+        task.status = result.status
         audit_event = dict(result.audit_event)
         audit_event.setdefault("execution_lifecycle", action_lifecycle(task, audit_event))
         return ActionResult(

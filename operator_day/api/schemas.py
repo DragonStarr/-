@@ -35,6 +35,19 @@ class ConfirmOut(BaseModel):
     audit_event: dict[str, Any] = Field(alias="auditEvent")
 
 
+class TelegramAuthIn(BaseModel):
+    init_data: str = Field(alias="initData", min_length=10, max_length=12000)
+
+
+class AuthSessionOut(BaseModel):
+    access_token: str = Field(alias="accessToken")
+    token_type: str = Field(default="bearer", alias="tokenType")
+    expires_in: int = Field(alias="expiresIn")
+    tenant_id: str = Field(alias="tenantId")
+    user_id: str = Field(alias="userId")
+    role: str
+
+
 class AccountIn(BaseModel):
     platform: str = Field(pattern="^(wb|ozon|ym|pvz)$")
     title: str = Field(min_length=1, max_length=200)

@@ -10,17 +10,27 @@ import type {
   Task
 } from "./types";
 
-const headers = {
+const demoHeaders = {
   "X-Tenant-Id": "demo-seller",
   "X-User-Id": "demo-owner",
   "X-Role": "owner"
 };
 
+function authHeaders() {
+  if (typeof window !== "undefined") {
+    const initData = window.Telegram?.WebApp?.initData;
+    if (initData) {
+      return { "X-Telegram-Init-Data": initData };
+    }
+  }
+  return demoHeaders;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
-      ...headers,
+      ...authHeaders(),
       "Content-Type": "application/json",
       ...(init?.headers ?? {})
     }

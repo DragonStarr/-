@@ -12,6 +12,7 @@ from operator_day.api.schemas import (
     AccountOut,
     ArchitectureGateOut,
     ArchitectureReviewOut,
+    AuthSessionOut,
     CapabilityOut,
     CatalogImportIn,
     CatalogImportOut,
@@ -37,6 +38,7 @@ from operator_day.api.schemas import (
     SyncCatalogIn,
     SyncCatalogOut,
     TaskOut,
+    TelegramAuthIn,
     ValidateAccountIn,
     ValidateAccountOut,
 )
@@ -72,6 +74,12 @@ from operator_day.repositories import (
     SelfUpdateRepository,
     TaskRepository,
 )
+from operator_day.security import (
+    AuthError,
+    create_session_token,
+    tenant_context_from_telegram_init_data,
+    verify_telegram_init_data,
+)
 from operator_day.selfupdate.pipeline import SelfUpdatePipeline
 from operator_day.skills_catalog import CORE_MCP_CHECKS, all_operator_capabilities
 from operator_day.telemetry.metrics import render_prometheus_metrics
@@ -85,6 +93,32 @@ ContextDep = Annotated[TenantContext, Depends(get_tenant_context)]
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "mode": "bot-miniapp-autonomous"}
+
+
+@router.post("/api/auth/telegram", response_model=AuthSessionOut)
+async def auth_telegram(payload: TelegramAuthIn) -> AuthSessionOut:
+    settings = get_settings()
+    try:
+        values = verify_telegram_init_data(
+            payload.init_data,
+            settings.telegram_bot_token,
+            ttl_seconds=settings.telegram_web_app_auth_ttl_seconds,
+        )
+        ctx = tenant_context_from_telegram_init_data(values)
+        token = create_session_token(
+            ctx,
+            settings.app_session_secret,
+            ttl_seconds=settings.app_session_ttl_seconds,
+        )
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail="Invalid Telegram auth") from exc
+    return AuthSessionOut(
+        accessToken=token,
+        expiresIn=settings.app_session_ttl_seconds,
+        tenantId=ctx.tenant_id,
+        userId=ctx.user_id,
+        role=ctx.role.value,
+    )
 
 
 @router.get("/metrics", response_class=PlainTextResponse)

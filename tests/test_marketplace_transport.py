@@ -76,6 +76,53 @@ async def test_transport_retries_429_then_returns_success() -> None:
     assert sleeps == [0]
 
 
+async def test_transport_adds_idempotency_header_for_write() -> None:
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["idempotency"] = request.headers.get("X-Idempotency-Key")
+        return httpx.Response(200, json={"ok": True})
+
+    transport = MarketplaceTransport(
+        MarketplaceCredentials(platform="ozon", api_key="seller-secret", client_id="client-1"),
+        http_transport=httpx.MockTransport(handler),
+    )
+
+    response = await transport.call_operation(
+        "ReviewAPI_SendAnswer",
+        {"review_id": "r1", "text": "ok"},
+        confirm_write=True,
+        idempotency_key="task-1:ReviewAPI_SendAnswer",
+    )
+
+    assert response == {"ok": True}
+    assert seen["idempotency"] == "task-1:ReviewAPI_SendAnswer"
+
+
+async def test_transport_does_not_retry_write_without_idempotency_key() -> None:
+    attempts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(500, json={"error": "temporary"})
+
+    transport = MarketplaceTransport(
+        MarketplaceCredentials(platform="ozon", api_key="seller-secret", client_id="client-1"),
+        http_transport=httpx.MockTransport(handler),
+        max_attempts=3,
+    )
+
+    with pytest.raises(MarketplaceApiError):
+        await transport.call_operation(
+            "ReviewAPI_SendAnswer",
+            {"review_id": "r1", "text": "ok"},
+            confirm_write=True,
+        )
+
+    assert attempts == 1
+
+
 async def test_transport_redacts_secret_from_error_body() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

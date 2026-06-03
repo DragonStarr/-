@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
+import json
 import re
 from pathlib import Path
+from time import time
+from typing import Any
+from urllib.parse import parse_qsl
 
 from cryptography.fernet import Fernet, InvalidToken
+
+from operator_day.domain import Role, TenantContext
 
 SECRET_PATTERNS = [
     re.compile(r"fe_oa_[a-zA-Z0-9]+"),
@@ -55,6 +62,115 @@ def neutralize_external_text(value: str, *, limit: int = 12_000) -> str:
 def fingerprint_secret(value: str) -> str:
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
     return digest[:10]
+
+
+class AuthError(ValueError):
+    pass
+
+
+def verify_telegram_init_data(
+    init_data: str,
+    bot_token: str,
+    *,
+    ttl_seconds: int = 86_400,
+    now: int | None = None,
+) -> dict[str, Any]:
+    if not bot_token:
+        raise AuthError("telegram bot token is not configured")
+    pairs = parse_qsl(init_data, keep_blank_values=True, strict_parsing=False)
+    values = dict(pairs)
+    expected_hash = values.pop("hash", "")
+    if not expected_hash:
+        raise AuthError("telegram init data hash is missing")
+    data_check_string = "\n".join(
+        f"{key}={value}" for key, value in sorted(values.items())
+    )
+    secret_key = hmac.new(
+        b"WebAppData",
+        bot_token.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    actual_hash = hmac.new(
+        secret_key,
+        data_check_string.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(actual_hash, expected_hash):
+        raise AuthError("telegram init data signature is invalid")
+    auth_date_raw = values.get("auth_date", "")
+    try:
+        auth_date = int(auth_date_raw)
+    except ValueError as exc:
+        raise AuthError("telegram init data auth_date is invalid") from exc
+    current = int(time() if now is None else now)
+    if ttl_seconds > 0 and current - auth_date > ttl_seconds:
+        raise AuthError("telegram init data is expired")
+    return values
+
+
+def tenant_context_from_telegram_init_data(values: dict[str, Any]) -> TenantContext:
+    raw_user = values.get("user") or "{}"
+    try:
+        user = json.loads(str(raw_user))
+    except json.JSONDecodeError as exc:
+        raise AuthError("telegram user payload is invalid") from exc
+    tg_id = str(user.get("id") or "").strip()
+    if not tg_id:
+        raise AuthError("telegram user id is missing")
+    return TenantContext(
+        tenant_id=f"tg-{tg_id}",
+        user_id=tg_id,
+        role=Role.OWNER,
+    )
+
+
+def create_session_token(
+    ctx: TenantContext,
+    secret: str,
+    *,
+    ttl_seconds: int = 3_600,
+    now: int | None = None,
+) -> str:
+    if not secret:
+        raise AuthError("session secret is not configured")
+    current = int(time() if now is None else now)
+    payload = {
+        "tenant_id": ctx.tenant_id,
+        "user_id": ctx.user_id,
+        "role": ctx.role.value,
+        "exp": current + ttl_seconds,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    signature = hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256)
+    return f"{body}.{signature.hexdigest()}"
+
+
+def verify_session_token(token: str, secret: str, *, now: int | None = None) -> TenantContext:
+    if not secret:
+        raise AuthError("session secret is not configured")
+    try:
+        body, signature = token.split(".", 1)
+    except ValueError as exc:
+        raise AuthError("session token is malformed") from exc
+    actual = hmac.new(secret.encode("utf-8"), body.encode("ascii"), hashlib.sha256)
+    if not hmac.compare_digest(actual.hexdigest(), signature):
+        raise AuthError("session token signature is invalid")
+    padded = body + "=" * (-len(body) % 4)
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise AuthError("session token payload is invalid") from exc
+    current = int(time() if now is None else now)
+    if int(payload.get("exp") or 0) < current:
+        raise AuthError("session token is expired")
+    try:
+        role = Role(str(payload["role"]))
+        tenant_id = str(payload["tenant_id"])
+        user_id = str(payload["user_id"])
+    except (KeyError, ValueError) as exc:
+        raise AuthError("session token context is invalid") from exc
+    return TenantContext(tenant_id=tenant_id, user_id=user_id, role=role)
 
 
 def _dev_fernet_key(seed: str) -> bytes:

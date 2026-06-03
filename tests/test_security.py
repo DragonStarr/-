@@ -1,9 +1,13 @@
 from operator_day.config import Settings
+from operator_day.domain import Role, TenantContext
 from operator_day.security import (
     TokenCipher,
+    create_session_token,
     fingerprint_secret,
     neutralize_external_text,
     redact_secret,
+    verify_session_token,
+    verify_telegram_init_data,
 )
 
 
@@ -55,3 +59,47 @@ def test_token_cipher_uses_dev_key_without_exposing_plaintext() -> None:
 
     assert "seller-token" not in encrypted
     assert cipher.decrypt(encrypted) == "seller-token"
+
+
+def test_session_token_roundtrip() -> None:
+    ctx = TenantContext("seller-1", "owner-1", Role.OWNER)
+    token = create_session_token(ctx, "session-secret", now=100, ttl_seconds=60)
+
+    restored = verify_session_token(token, "session-secret", now=120)
+
+    assert restored == ctx
+
+
+def test_session_token_rejects_tampering() -> None:
+    ctx = TenantContext("seller-1", "owner-1", Role.OWNER)
+    token = create_session_token(ctx, "session-secret", now=100)
+
+    try:
+        verify_session_token(token + "bad", "session-secret", now=120)
+    except ValueError as exc:
+        assert "signature" in str(exc)
+    else:
+        raise AssertionError("tampered token must be rejected")
+
+
+def test_telegram_init_data_signature_is_verified() -> None:
+    import hashlib
+    import hmac
+    import json
+    from urllib.parse import urlencode
+
+    bot_token = "123456:telegram-token-for-test"
+    values = {
+        "auth_date": "100",
+        "query_id": "query-1",
+        "user": json.dumps({"id": 777, "first_name": "Мария"}, separators=(",", ":")),
+    }
+    data_check = "\n".join(f"{key}={value}" for key, value in sorted(values.items()))
+    secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    signature = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+    init_data = urlencode({**values, "hash": signature})
+
+    verified = verify_telegram_init_data(init_data, bot_token, now=120, ttl_seconds=60)
+
+    assert verified["auth_date"] == "100"
+    assert '"id":777' in verified["user"]
