@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "мпомощник",
-  description: "Оператор дня для селлеров и ПВЗ",
+  description: "Оператор дня для селлеров и владельцев ПВЗ",
   applicationName: "мпомощник",
   appleWebApp: {
     capable: true,
@@ -19,7 +19,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#b6ff2e"
+  themeColor: "#10151c"
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

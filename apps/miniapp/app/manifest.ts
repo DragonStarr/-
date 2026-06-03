@@ -4,11 +4,11 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "мпомощник: Оператор дня",
     short_name: "мпомощник",
-    description: "Telegram Mini App и PWA для ежедневных дел селлера и ПВЗ.",
+    description: "Telegram Mini App и PWA для ежедневных действий селлера и ПВЗ.",
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#eef3ef",
+    background_color: "#10151c",
     theme_color: "#b6ff2e",
     icons: [
       {

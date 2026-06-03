@@ -14,12 +14,28 @@ export type Task = {
   payload: Record<string, unknown>;
 };
 
+export type ConfirmResult = {
+  taskId: string;
+  status: string;
+  text: string;
+  auditEvent: Record<string, unknown>;
+};
+
 export type AccountCapability = {
   accountId: string;
   platform: string;
   title: string;
   capabilities: Record<string, string>;
   limitations: string[];
+};
+
+export type AccountActionResult = {
+  accountId: string;
+  source: string;
+  status?: string;
+  dryRun: boolean;
+  count?: number;
+  plannedOperation: Record<string, unknown> | null;
 };
 
 export type Readiness = {
@@ -43,4 +59,37 @@ export type PluginManifest = {
   status: string;
   requiresConfirm: boolean;
   inputSchema: Record<string, unknown>;
+};
+
+export type ClaimDeadline = {
+  policyId: string;
+  platform: string;
+  claimType: string;
+  days: number;
+  sourceUrl: string;
+  note: string;
+};
+
+export type LlmStatus = {
+  configured: boolean;
+  model: string;
+  primaryProvider: string;
+  primaryModel: string;
+  externalEnabled: boolean;
+  smokeEnabled: boolean;
+  liveCheckRequested: boolean;
+  liveCheckRan: boolean;
+  modelAvailable: boolean | null;
+  status: string;
+};
+
+export type MemoryItem = {
+  memoryId: string;
+  scope: string;
+  title: string;
+  text: string;
+  textHash: string;
+  embeddingModel: string;
+  score: number;
+  payload: Record<string, unknown>;
 };
