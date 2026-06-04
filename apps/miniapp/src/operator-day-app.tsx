@@ -420,6 +420,7 @@ export function OperatorDayApp() {
       </header>
 
       <HeroWallet
+        compact={tab !== "day"}
         metrics={metrics}
         readiness={readiness}
         onCreate={() => setCreateOpen(true)}
@@ -552,6 +553,7 @@ function StatusPill({ notice }: { notice: Notice }) {
 }
 
 function HeroWallet({
+  compact,
   metrics,
   readiness,
   onCreate,
@@ -559,6 +561,7 @@ function HeroWallet({
   onAds,
   onStock
 }: {
+  compact: boolean;
   metrics: ReturnType<typeof buildMetrics>;
   readiness: Readiness | null;
   onCreate: () => void;
@@ -567,7 +570,7 @@ function HeroWallet({
   onStock: () => void;
 }) {
   return (
-    <section className="hero-wallet">
+    <section className={compact ? "hero-wallet compact" : "hero-wallet"}>
       <div className="hero-head">
         <div>
           <p>Эффект за сегодня</p>
@@ -897,10 +900,17 @@ function MoneyView({
         <div className="deadline-list">
           {deadlines.length ? (
             deadlines.map((deadline) => (
-              <a href={deadline.sourceUrl} key={deadline.policyId} rel="noreferrer" target="_blank">
+              <a
+                className={deadline.ownerVerified ? "verified" : "needs-review"}
+                href={deadline.sourceUrl}
+                key={deadline.policyId}
+                rel="noreferrer"
+                target="_blank"
+              >
                 <span>{platformName(deadline.platform)}</span>
-                <strong>{deadline.claimType}</strong>
+                <strong>{claimTypeLabel(deadline.claimType)}</strong>
                 <em>{deadline.days} дней</em>
+                <small>{deadline.ownerVerified ? "Проверено" : "Подтвердить"}</small>
               </a>
             ))
           ) : (
@@ -1471,6 +1481,17 @@ function blockerLabel(blocker: string) {
     self_update_checks: "проверки обновлений"
   };
   return map[blocker] ?? blocker;
+}
+
+function claimTypeLabel(claimType: string) {
+  const map: Record<string, string> = {
+    lost_or_damaged: "Потеря или брак",
+    overcharge: "Лишнее удержание",
+    penalty: "Штраф",
+    shortfall: "Недостача",
+    return_dispute: "Спор по возврату"
+  };
+  return map[claimType] ?? claimType.replaceAll("_", " ");
 }
 
 function writeScopeLabel(blocker: string) {

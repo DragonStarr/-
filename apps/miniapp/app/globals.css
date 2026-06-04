@@ -238,6 +238,31 @@ button {
   box-shadow: var(--shadow);
 }
 
+.hero-wallet.compact {
+  margin: 12px 0 10px;
+  padding: 14px;
+}
+
+.hero-wallet.compact .hero-head strong {
+  margin-top: 6px;
+  font-size: clamp(32px, 9.4vw, 42px);
+}
+
+.hero-wallet.compact .growth {
+  margin-top: 7px;
+  font-size: 14px;
+}
+
+.hero-wallet.compact .sparkline,
+.hero-wallet.compact .stat-grid,
+.hero-wallet.compact .quick-actions {
+  display: none;
+}
+
+.hero-wallet.compact .hero-foot {
+  margin-top: 12px;
+}
+
 .hero-head {
   display: flex;
   gap: 12px;
@@ -787,23 +812,59 @@ button {
 
 .deadline-list a {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 58px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "platform status"
+    "title days";
+  gap: 4px 10px;
   align-items: center;
-  min-height: 44px;
+  min-height: 58px;
   padding: 8px;
   color: inherit;
   text-decoration: none;
   background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
 }
 
+.deadline-list a.verified {
+  border-color: rgba(163, 255, 18, 0.24);
+}
+
+.deadline-list a.needs-review {
+  border-color: rgba(255, 190, 80, 0.28);
+}
+
 .deadline-list span,
-.deadline-list em {
+.deadline-list em,
+.deadline-list small {
   color: var(--muted);
   font-size: 12px;
   font-style: normal;
   font-weight: 760;
+}
+
+.deadline-list span {
+  grid-area: platform;
+}
+
+.deadline-list strong {
+  grid-area: title;
+}
+
+.deadline-list em {
+  grid-area: days;
+  justify-self: end;
+}
+
+.deadline-list small {
+  grid-area: status;
+  justify-self: end;
+  color: var(--lime);
+}
+
+.deadline-list a.needs-review small {
+  color: #ffbe50;
 }
 
 .deadline-list strong {

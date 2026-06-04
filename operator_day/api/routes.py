@@ -53,6 +53,10 @@ from operator_day.api.schemas import (
 from operator_day.brain.architecture import ArchitectureReviewService
 from operator_day.brain.llm import LlmRouter
 from operator_day.brain.orchestrator import MorningOrchestrator
+from operator_day.claim_deadlines import (
+    OWNER_VERIFICATION_REQUIRED,
+    default_claim_deadline_rules,
+)
 from operator_day.config import get_settings
 from operator_day.connectors.live_sync import (
     plan_catalog_sync_for_account,
@@ -693,7 +697,13 @@ async def save_claim_deadline(
 @router.get("/api/claim-deadlines", response_model=list[ClaimDeadlineOut])
 async def list_claim_deadlines(session: SessionDep, ctx: ContextDep) -> list[ClaimDeadlineOut]:
     rows = await ClaimPolicyRepository(session).list_deadline_policies(ctx)
-    return [_claim_deadline_out(row) for row in rows]
+    seen = {(row.platform, row.claim_type) for row in rows}
+    defaults = [
+        _default_claim_deadline_out(rule)
+        for rule in default_claim_deadline_rules()
+        if (rule.platform.value, rule.claim_type) not in seen
+    ]
+    return [_claim_deadline_out(row) for row in rows] + defaults
 
 
 def _task_out(task) -> TaskOut:
@@ -745,6 +755,7 @@ def _account_out(account) -> AccountOut:
 
 
 def _claim_deadline_out(row) -> ClaimDeadlineOut:
+    needs_verification = OWNER_VERIFICATION_REQUIRED in (row.note or "")
     return ClaimDeadlineOut(
         policyId=row.id,
         platform=row.platform,
@@ -752,6 +763,23 @@ def _claim_deadline_out(row) -> ClaimDeadlineOut:
         days=row.days,
         sourceUrl=row.source_url,
         note=row.note,
+        sourceKind="owner",
+        ownerVerified=not needs_verification,
+        needsOwnerVerification=needs_verification,
+    )
+
+
+def _default_claim_deadline_out(rule) -> ClaimDeadlineOut:
+    return ClaimDeadlineOut(
+        policyId=f"baseline-{rule.platform.value}-{rule.claim_type}",
+        platform=rule.platform.value,
+        claimType=rule.claim_type,
+        days=rule.days,
+        sourceUrl=rule.source_url,
+        note=rule.note,
+        sourceKind="baseline",
+        ownerVerified=False,
+        needsOwnerVerification=True,
     )
 
 

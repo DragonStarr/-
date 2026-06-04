@@ -77,6 +77,9 @@ export type ClaimDeadline = {
   days: number;
   sourceUrl: string;
   note: string;
+  sourceKind: string;
+  ownerVerified: boolean;
+  needsOwnerVerification: boolean;
 };
 
 export type LlmStatus = {

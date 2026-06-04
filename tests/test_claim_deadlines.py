@@ -22,7 +22,28 @@ async def test_owner_can_store_source_linked_claim_deadline_policy() -> None:
     assert created.status_code == 200
     assert created.json()["platform"] == "ozon"
     assert created.json()["sourceUrl"] == "https://docs.ozon.ru/"
-    assert listed.json()[0]["claimType"] == "lost_or_damaged"
+    first = listed.json()[0]
+    assert first["claimType"] == "lost_or_damaged"
+    assert first["sourceKind"] == "owner"
+    assert first["ownerVerified"] is True
+    assert first["needsOwnerVerification"] is False
+
+
+async def test_claim_deadline_list_includes_unverified_baseline_rules() -> None:
+    headers = {"X-Tenant-Id": "claims-baseline", "X-User-Id": "owner", "X-Role": "owner"}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=create_app()), base_url="http://test"
+    ) as client:
+        listed = await client.get("/api/claim-deadlines", headers=headers)
+
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert len(rows) == 3
+    assert {row["platform"] for row in rows} == {"ozon", "wb", "ym"}
+    assert all(row["sourceKind"] == "baseline" for row in rows)
+    assert all(row["ownerVerified"] is False for row in rows)
+    assert all(row["needsOwnerVerification"] is True for row in rows)
 
 
 async def test_non_owner_cannot_store_claim_deadline_policy() -> None:

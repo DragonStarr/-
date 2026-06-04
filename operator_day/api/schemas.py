@@ -134,6 +134,9 @@ class ClaimDeadlineOut(BaseModel):
     days: int
     source_url: str = Field(alias="sourceUrl")
     note: str
+    source_kind: str = Field(alias="sourceKind")
+    owner_verified: bool = Field(alias="ownerVerified")
+    needs_owner_verification: bool = Field(alias="needsOwnerVerification")
 
 
 class ClaimCandidateIn(BaseModel):
