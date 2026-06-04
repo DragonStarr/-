@@ -115,7 +115,7 @@ async def _record_internal_result(
         task_id=task.task_id,
     )
     honest_user_text = _honest_local_text(user_text)
-    status = TaskStatus.ESCALATED if task.risk == ActionRisk.HUMAN else TaskStatus.DONE
+    status = TaskStatus.ESCALATED if task.risk == ActionRisk.HUMAN else TaskStatus.PLANNED
     return ActionResult(
         task_id=task.task_id,
         status=status,
@@ -137,9 +137,9 @@ async def _record_internal_result(
 def _honest_local_text(text: str) -> str:
     normalized = text
     if normalized.startswith("Готово. "):
-        normalized = "Записал. " + normalized.removeprefix("Готово. ")
+        normalized = "План сохранён. " + normalized.removeprefix("Готово. ")
     elif normalized.startswith("Готово "):
-        normalized = "Записал " + normalized.removeprefix("Готово ")
+        normalized = "План сохранён " + normalized.removeprefix("Готово ")
     if "кабинет" not in normalized.lower() and "ЛК" not in normalized:
         normalized = f"{normalized} Внешние кабинеты не менял."
     return normalized

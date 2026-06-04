@@ -326,13 +326,13 @@ export function OperatorDayApp() {
           customTasks.map((item) => (item.taskId === task.taskId ? { ...item, status: result.status } : item))
         );
         setConfirmResult(result);
-        setNotice({ text: "Записано", tone: "ready" });
+        setNotice({ text: noticeTextForResult(result.status), tone: "ready" });
         return;
       }
 
       const result = await confirmTask(task.taskId);
       setConfirmResult(result);
-      setNotice({ text: "Записано", tone: "ready" });
+      setNotice({ text: noticeTextForResult(result.status), tone: "ready" });
       setTasks((rows) =>
         rows.map((item) => (item.taskId === task.taskId ? { ...item, status: result.status } : item))
       );
@@ -1194,6 +1194,7 @@ function ActionPreview({
 }) {
   const sources = sourceList(task);
   const checks = checkList(task);
+  const resultLabel = resultActionLabel(result?.status);
   return (
     <div className="preview-layer" role="presentation">
       <section aria-modal="true" className="preview-sheet action-sheet" role="dialog">
@@ -1256,7 +1257,7 @@ function ActionPreview({
           </button>
           <button className="primary-action" disabled={busy || !!result} onClick={onConfirm} type="button">
             {busy ? <Loader2 size={18} className="spin" /> : <Check size={18} />}
-            <span>{result ? "Записано" : "Подтвердить"}</span>
+            <span>{result ? resultLabel : "Подтвердить"}</span>
           </button>
         </div>
       </section>
@@ -1630,7 +1631,19 @@ function cleanText(value: string) {
 }
 
 function isDone(status: string) {
-  return status === "done" || status === "executed" || status === "prepared" || status === "recorded";
+  return status === "done" || status === "executed" || status === "recorded";
+}
+
+function noticeTextForResult(status?: string) {
+  if (status === "planned") return "План готов";
+  if (status === "done" || status === "executed") return "Выполнено";
+  return "Записано";
+}
+
+function resultActionLabel(status?: string) {
+  if (status === "planned") return "План сохранён";
+  if (status === "done" || status === "executed") return "Выполнено";
+  return "Записано";
 }
 
 function formatMoney(value: number) {

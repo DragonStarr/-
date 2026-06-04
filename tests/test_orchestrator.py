@@ -293,8 +293,9 @@ async def test_local_module_records_artifact_without_marketplace_write() -> None
 
     result = await orchestrator.execute_prepared(ctx, task)
 
-    assert result.status == TaskStatus.DONE
+    assert result.status == TaskStatus.PLANNED
     assert not result.user_text.startswith("Готово")
+    assert result.user_text.startswith("План сохранён")
     assert result.audit_event["connector_status"] in {"planned", "recorded"}
     assert result.audit_event["marketplace_write"] == "not_attempted"
     assert result.audit_event["artifact"]["artifact_type"] == "supply_plan"
