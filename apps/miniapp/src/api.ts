@@ -1,6 +1,7 @@
 import type {
   AccountActionResult,
   AccountCapability,
+  ArchitectureGate,
   ClaimDeadline,
   ConfirmResult,
   LlmStatus,
@@ -160,6 +161,10 @@ export async function getClaimDeadlines(): Promise<ClaimDeadline[]> {
 
 export async function getLlmStatus(): Promise<LlmStatus> {
   return request<LlmStatus>("/api/brain/llm-status");
+}
+
+export async function getArchitectureGate(live = false): Promise<ArchitectureGate> {
+  return request<ArchitectureGate>(`/api/brain/architecture-gate${live ? "?live=true" : ""}`);
 }
 
 export async function saveMemory(

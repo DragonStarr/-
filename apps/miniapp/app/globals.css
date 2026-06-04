@@ -954,6 +954,7 @@ button {
 }
 
 .memory-card form > button,
+.check-button,
 .primary-action {
   display: inline-flex;
   gap: 8px;
@@ -963,6 +964,41 @@ button {
   background: linear-gradient(145deg, #bcff19, #92e800);
   border-color: rgba(168, 255, 20, 0.65);
   box-shadow: 0 14px 24px rgba(168, 255, 20, 0.14);
+}
+
+.check-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  border-radius: 8px;
+}
+
+.gate-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.gate-summary span {
+  color: var(--lime);
+  font-size: 13px;
+  font-weight: 860;
+}
+
+.gate-summary strong {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.gate-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.36;
 }
 
 .search-form {

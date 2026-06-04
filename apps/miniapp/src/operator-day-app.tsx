@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import {
   confirmTask,
+  getArchitectureGate,
   getAccounts,
   getClaimDeadlines,
   getLlmStatus,
@@ -46,6 +47,7 @@ import {
 import type {
   AccountActionResult,
   AccountCapability,
+  ArchitectureGate,
   ClaimDeadline,
   ConfirmResult,
   LlmStatus,
@@ -159,6 +161,8 @@ export function OperatorDayApp() {
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
   const [deadlines, setDeadlines] = useState<ClaimDeadline[]>([]);
   const [llmStatus, setLlmStatus] = useState<LlmStatus | null>(null);
+  const [architectureGate, setArchitectureGate] = useState<ArchitectureGate | null>(null);
+  const [architectureNotice, setArchitectureNotice] = useState("");
   const [memoryResults, setMemoryResults] = useState<MemoryItem[]>([]);
   const [memoryText, setMemoryText] = useState("");
   const [memoryQuery, setMemoryQuery] = useState("");
@@ -407,6 +411,17 @@ export function OperatorDayApp() {
     }
   }
 
+  async function handleArchitectureGate() {
+    setArchitectureNotice("Проверяю логику сервера");
+    try {
+      const gate = await getArchitectureGate(false);
+      setArchitectureGate(gate);
+      setArchitectureNotice(gate.verdict === "pass" ? "Проверка пройдена" : "Есть что закрыть");
+    } catch {
+      setArchitectureNotice("Проверка не ответила");
+    }
+  }
+
   return (
     <main className="app-shell">
       <div className="noise-layer" aria-hidden="true" />
@@ -480,10 +495,13 @@ export function OperatorDayApp() {
             readiness={readiness}
             plugins={plugins}
             llmStatus={llmStatus}
+            architectureGate={architectureGate}
+            architectureNotice={architectureNotice}
             memoryText={memoryText}
             memoryQuery={memoryQuery}
             memoryNotice={memoryNotice}
             memoryResults={memoryResults}
+            onArchitectureGate={handleArchitectureGate}
             onMemoryText={setMemoryText}
             onMemoryQuery={setMemoryQuery}
             onMemorySave={handleMemorySave}
@@ -961,10 +979,13 @@ function MoreView({
   readiness,
   plugins,
   llmStatus,
+  architectureGate,
+  architectureNotice,
   memoryText,
   memoryQuery,
   memoryNotice,
   memoryResults,
+  onArchitectureGate,
   onMemoryText,
   onMemoryQuery,
   onMemorySave,
@@ -973,10 +994,13 @@ function MoreView({
   readiness: Readiness | null;
   plugins: PluginManifest[];
   llmStatus: LlmStatus | null;
+  architectureGate: ArchitectureGate | null;
+  architectureNotice: string;
   memoryText: string;
   memoryQuery: string;
   memoryNotice: string;
   memoryResults: MemoryItem[];
+  onArchitectureGate: () => void;
   onMemoryText: (value: string) => void;
   onMemoryQuery: (value: string) => void;
   onMemorySave: (event: FormEvent<HTMLFormElement>) => void;
@@ -1030,6 +1054,27 @@ function MoreView({
           </div>
         )}
         <p className="quiet-text">{llmStatusLabel(llmStatus)}</p>
+        <button className="check-button" type="button" onClick={onArchitectureGate}>
+          <ShieldCheck size={17} />
+          <span>Проверить логику сервера</span>
+        </button>
+        {architectureNotice && <p className="action-note">{architectureNotice}</p>}
+        {architectureGate && (
+          <div className="gate-summary">
+            <span>{architectureGate.verdict === "pass" ? "Логика прошла проверку" : "Нужно закрыть перед живым пилотом"}</span>
+            <strong>{gateModelLabel(architectureGate)}</strong>
+            <p>{plainGateText(architectureGate.text)}</p>
+            {architectureGate.blockers.length > 0 && (
+              <div className="chip-row">
+                {architectureGate.blockers.map((blocker) => (
+                  <span className="chip wait" key={blocker}>
+                    {plainGateBlocker(blocker)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </section>
       <section className="readiness-card">
         <div className="row-between">
@@ -1467,6 +1512,30 @@ function llmStatusLabel(status: LlmStatus | null) {
   if (status.modelAvailable) return "Модель отвечает и готова помогать с решениями.";
   if (status.configured) return "Ключ модели настроен, нужна проверка на сервере.";
   return "Сейчас работает локальная логика без внешней модели.";
+}
+
+function plainGateBlocker(blocker: string) {
+  const normalized = blocker.toLowerCase();
+  if (normalized.includes("llm") || normalized.includes("модель") || normalized.includes("smoke")) {
+    return "проверка модели на сервере";
+  }
+  if (normalized.includes("secret") || normalized.includes("секрет")) return "проверка ключей";
+  if (normalized.includes("write") || normalized.includes("ok")) return "права на реальные действия";
+  if (normalized.includes("self-update")) return "безопасное обновление";
+  return blockerLabel(blocker);
+}
+
+function plainGateText(text: string) {
+  const normalized = text.toLowerCase();
+  if (normalized.includes("prod llm") || normalized.includes("smoke")) {
+    return "Серверная логика собрана. Для живого пилота нужно включить и проверить модель на сервере, чтобы она реально отвечала перед работой с кабинетами.";
+  }
+  return text.replaceAll("prod LLM gate", "проверка модели").replaceAll("smoke-прогон", "проверка");
+}
+
+function gateModelLabel(gate: ArchitectureGate) {
+  if (gate.usedFallback) return "Без расхода внешней модели";
+  return gate.model;
 }
 
 function blockerLabel(blocker: string) {

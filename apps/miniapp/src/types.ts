@@ -95,6 +95,16 @@ export type LlmStatus = {
   status: string;
 };
 
+export type ArchitectureGate = {
+  topology: Record<string, unknown>;
+  verdict: string;
+  text: string;
+  blockers: string[];
+  model: string;
+  usedFallback: boolean;
+  tokensEstimate: number;
+};
+
 export type MemoryItem = {
   memoryId: string;
   scope: string;
