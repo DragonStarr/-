@@ -38,6 +38,7 @@ import {
   getMorningTasks,
   getPlugins,
   getReadiness,
+  getReleaseGate,
   saveMemory,
   searchMemory,
   sendFeedback,
@@ -54,6 +55,7 @@ import type {
   MemoryItem,
   PluginManifest,
   Readiness,
+  ReleaseGate,
   Task
 } from "./types";
 
@@ -158,6 +160,7 @@ export function OperatorDayApp() {
   const [customTasks, setCustomTasks] = useState<Task[]>([]);
   const [accounts, setAccounts] = useState<AccountCapability[]>([]);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [releaseGate, setReleaseGate] = useState<ReleaseGate | null>(null);
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
   const [deadlines, setDeadlines] = useState<ClaimDeadline[]>([]);
   const [llmStatus, setLlmStatus] = useState<LlmStatus | null>(null);
@@ -196,10 +199,11 @@ export function OperatorDayApp() {
       setLoading(true);
       setNotice({ text: "Собираю дела", tone: "loading" });
       try {
-        const [taskRows, accountRows, ready, pluginRows, deadlineRows, llm] = await Promise.all([
+        const [taskRows, accountRows, ready, finalGate, pluginRows, deadlineRows, llm] = await Promise.all([
           getMorningTasks(),
           getAccounts(),
           getReadiness(),
+          getReleaseGate(true).catch(() => null),
           getPlugins().catch(() => []),
           getClaimDeadlines().catch(() => []),
           getLlmStatus().catch(() => null)
@@ -208,6 +212,7 @@ export function OperatorDayApp() {
         setTasks(taskRows);
         setAccounts(accountRows);
         setReadiness(ready);
+        setReleaseGate(finalGate);
         setPlugins(pluginRows);
         setDeadlines(deadlineRows);
         setLlmStatus(llm);
@@ -218,6 +223,7 @@ export function OperatorDayApp() {
         setTasks([]);
         setAccounts([]);
         setReadiness(null);
+        setReleaseGate(null);
         setPlugins([]);
         setDeadlines([]);
         setLlmStatus(null);
@@ -493,6 +499,7 @@ export function OperatorDayApp() {
         {tab === "more" && (
           <MoreView
             readiness={readiness}
+            releaseGate={releaseGate}
             plugins={plugins}
             llmStatus={llmStatus}
             architectureGate={architectureGate}
@@ -977,6 +984,7 @@ function PvzView({
 
 function MoreView({
   readiness,
+  releaseGate,
   plugins,
   llmStatus,
   architectureGate,
@@ -992,6 +1000,7 @@ function MoreView({
   onMemorySearch
 }: {
   readiness: Readiness | null;
+  releaseGate: ReleaseGate | null;
   plugins: PluginManifest[];
   llmStatus: LlmStatus | null;
   architectureGate: ArchitectureGate | null;
@@ -1034,7 +1043,7 @@ function MoreView({
               </span>
             </div>
             {readiness.blockers.length > 0 && (
-              <p className="quiet-text">Чтобы включить живой пилот: {readiness.blockers.map(blockerLabel).join(", ")}.</p>
+              <p className="quiet-text">Чтобы включить живую работу: {readiness.blockers.map(blockerLabel).join(", ")}.</p>
             )}
           </>
         ) : (
@@ -1061,7 +1070,7 @@ function MoreView({
         {architectureNotice && <p className="action-note">{architectureNotice}</p>}
         {architectureGate && (
           <div className="gate-summary">
-            <span>{architectureGate.verdict === "pass" ? "Логика прошла проверку" : "Нужно закрыть перед живым пилотом"}</span>
+            <span>{architectureGate.verdict === "pass" ? "Логика прошла проверку" : "Нужно закрыть перед живой работой"}</span>
             <strong>{gateModelLabel(architectureGate)}</strong>
             <p>{plainGateText(architectureGate.text)}</p>
             {architectureGate.blockers.length > 0 && (
@@ -1076,6 +1085,7 @@ function MoreView({
           </div>
         )}
       </section>
+      <ReleaseGatePanel gate={releaseGate} />
       <section className="readiness-card">
         <div className="row-between">
           <div>
@@ -1134,6 +1144,59 @@ function MoreView({
         </div>
       </article>
     </div>
+  );
+}
+
+function ReleaseGatePanel({ gate }: { gate: ReleaseGate | null }) {
+  if (!gate) {
+    return (
+      <section className="readiness-card">
+        <div className="row-between">
+          <div>
+            <p>20 пунктов</p>
+            <h3>Финальная проверка не загружена</h3>
+          </div>
+          <ClipboardCheck size={22} />
+        </div>
+        <p className="quiet-text">Покажу полный список закрытия проекта, когда сервер ответит.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="readiness-card release-gate-card">
+      <div className="row-between">
+        <div>
+          <p>20 пунктов</p>
+          <h3>{releaseGateLabel(gate.overallStatus)}</h3>
+        </div>
+        <ClipboardCheck size={22} />
+      </div>
+      <div className="release-summary">
+        <MiniProof label="закрыто" value={String(gate.summary.passed)} />
+        <MiniProof label="имитация" value={String(gate.summary.simulated)} />
+        <MiniProof label="блоки" value={String(gate.summary.blocked)} />
+      </div>
+      <div className="release-list">
+        {gate.criteria.map((criterion) => (
+          <div className={`release-row ${criterion.status}`} key={criterion.id}>
+            <span>{criterion.id}</span>
+            <div>
+              <strong>{criterion.title}</strong>
+              <small>{criterionStatusLabel(criterion.status)}</small>
+              {criterion.blockers.length > 0 && (
+                <em>{criterion.blockers.map(blockerLabel).join(", ")}</em>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {gate.liveBlockers.length > 0 && (
+        <p className="quiet-text">
+          Для живого запуска осталось: {gate.liveBlockers.map(blockerLabel).join(", ")}.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -1502,10 +1565,24 @@ function capabilityStatusName(status: string) {
 }
 
 function readinessLabel(status?: string) {
-  if (status === "ready_for_live_pilot") return "готов к реальному пилоту";
+  if (status === "ready_for_live_pilot") return "готов к живой работе";
   if (status === "blocked_for_live_pilot") return "ждёт ключи кабинетов";
   if (status === "ready_for_safe_pilot") return "готов к безопасному тесту";
   return "проверяется";
+}
+
+function releaseGateLabel(status?: string) {
+  if (status === "ready_for_real_use") return "готово к живой работе";
+  if (status === "ready_under_simulation") return "закрыто в имитации";
+  if (status === "blocked_for_real_use") return "есть блоки перед сдачей";
+  return "проверяется";
+}
+
+function criterionStatusLabel(status: string) {
+  if (status === "passed") return "закрыто";
+  if (status === "simulated") return "проверено без ключей";
+  if (status === "blocked") return "нужно закрыть";
+  return status;
 }
 
 function llmStatusLabel(status: LlmStatus | null) {
@@ -1529,7 +1606,7 @@ function plainGateBlocker(blocker: string) {
 function plainGateText(text: string) {
   const normalized = text.toLowerCase();
   if (normalized.includes("prod llm") || normalized.includes("smoke")) {
-    return "Серверная логика собрана. Для живого пилота нужно включить и проверить модель на сервере, чтобы она реально отвечала перед работой с кабинетами.";
+    return "Серверная логика собрана. Для живой работы нужно включить и проверить модель на сервере, чтобы она реально отвечала перед работой с кабинетами.";
   }
   return text.replaceAll("prod LLM gate", "проверка модели").replaceAll("smoke-прогон", "проверка");
 }
@@ -1548,7 +1625,8 @@ function blockerLabel(blocker: string) {
     architecture_gate: "проверка архитектуры",
     prod_llm_gate: "проверка модели на сервере",
     morning_scheduler: "утренний автосбор",
-    self_update_checks: "проверки обновлений"
+    self_update_checks: "проверки обновлений",
+    git_remote_url: "ссылка на Git для выгрузки"
   };
   return map[blocker] ?? blocker;
 }

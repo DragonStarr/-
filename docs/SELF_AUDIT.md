@@ -4,7 +4,7 @@
 
 - Backend has tenant-scoped repositories, encrypted account tokens, idempotent confirmations and audit log.
 - Telegram webhook checks the secret header when configured.
-- LLM gateway is model-agnostic: local primary, external optional, offline fallback for safe pilot logic without spending external tokens.
+- LLM gateway is model-agnostic: local primary, external optional, offline fallback for safe test logic without spending external tokens.
 - Prompt-injection and secret redaction are applied before LLM prompts.
 - Plugin buttons use manifests and action allow-list, not arbitrary code.
 - Self-update pipeline records last-known-good, sandbox/test/LLM/canary gates and rollback state.
@@ -13,6 +13,7 @@
 - Semantic memory is tenant-scoped, sanitized before persistence and pgvector-ready for a production embedding backend.
 - CI covers backend lint/tests and Mini App typecheck/build/audit; Docker/compose and backup/restore runbooks are present.
 - Runtime does not depend on live upstream SDK imports.
+- `/api/release-gate` exposes a 20-point final readiness check and separates safe simulation from blockers before real operation.
 
 ## Still Needs Real Deployment Inputs
 

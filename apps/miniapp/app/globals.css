@@ -770,6 +770,81 @@ button {
   border-color: rgba(255, 211, 90, 0.17);
 }
 
+.release-gate-card {
+  gap: 13px;
+}
+
+.release-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.release-list {
+  display: grid;
+  gap: 6px;
+}
+
+.release-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+  min-height: 52px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+.release-row > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 860;
+  background: var(--lime);
+  border-radius: 8px;
+}
+
+.release-row.blocked > span {
+  color: #ffffff;
+  background: var(--red);
+}
+
+.release-row.simulated > span {
+  color: var(--ink);
+  background: var(--warn);
+}
+
+.release-row strong {
+  display: block;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.release-row small,
+.release-row em {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.25;
+}
+
+.release-row.blocked small {
+  color: #ffb3aa;
+}
+
+.release-row.simulated small {
+  color: var(--warn);
+}
+
 .button-row button {
   flex: 1 1 130px;
 }

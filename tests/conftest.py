@@ -1,4 +1,3 @@
-import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -8,8 +7,10 @@ from operator_day.db import get_engine, get_sessionmaker
 from operator_day.models import Base
 
 
-@pytest.fixture(autouse=True)
-def reset_runtime_caches():
+@pytest_asyncio.fixture(autouse=True)
+async def reset_runtime_caches():
+    if get_engine.cache_info().currsize:
+        await db_module.dispose_engine()
     get_settings.cache_clear()
     get_sessionmaker.cache_clear()
     get_engine.cache_clear()
@@ -17,6 +18,8 @@ def reset_runtime_caches():
     try:
         yield
     finally:
+        if get_engine.cache_info().currsize:
+            await db_module.dispose_engine()
         get_settings.cache_clear()
         get_sessionmaker.cache_clear()
         get_engine.cache_clear()

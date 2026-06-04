@@ -58,7 +58,7 @@ def render_accounts_status(
         labels = [_live_blocker_label(item) for item in live_blockers if item]
         if labels:
             lines.append("")
-            lines.append("Живой пилот пока ждёт: " + ", ".join(labels) + ".")
+            lines.append("Живая работа пока ждёт: " + ", ".join(labels) + ".")
     return "\n".join(lines)
 
 

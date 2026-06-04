@@ -34,6 +34,7 @@ from operator_day.api.schemas import (
     PluginManifestOut,
     PvzImportIn,
     PvzImportOut,
+    ReleaseGateOut,
     ReviewsImportIn,
     ReviewsImportOut,
     SalesImportIn,
@@ -74,6 +75,7 @@ from operator_day.policies import (
     ensure_can_connect_account,
     ensure_can_manage_pvz,
 )
+from operator_day.release_gate import build_release_gate
 from operator_day.repositories import (
     AccountRepository,
     CatalogRepository,
@@ -496,6 +498,18 @@ async def readiness(session: SessionDep, ctx: ContextDep) -> dict:
         "writeScopeBlockers": write_scope_blockers,
         "blockers": blockers,
     }
+
+
+@router.get("/api/release-gate", response_model=ReleaseGateOut)
+async def release_gate(
+    session: SessionDep,
+    ctx: ContextDep,
+    simulation: bool = True,
+) -> ReleaseGateOut:
+    ensure_can_connect_account(ctx)
+    return ReleaseGateOut.model_validate(
+        await build_release_gate(session, ctx, simulation=simulation)
+    )
 
 
 @router.get("/api/brain/architecture-review", response_model=ArchitectureReviewOut)

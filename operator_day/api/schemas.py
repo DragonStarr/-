@@ -310,6 +310,23 @@ class WriteScopeVerificationOut(BaseModel):
     status: str
 
 
+class ReleaseCriterionOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    evidence: list[str]
+    blockers: list[str]
+
+
+class ReleaseGateOut(BaseModel):
+    overall_status: str = Field(alias="overallStatus")
+    simulation: bool
+    criteria: list[ReleaseCriterionOut]
+    live_blockers: list[str] = Field(alias="liveBlockers")
+    summary: dict[str, int]
+    proof: dict[str, int | bool | str]
+
+
 class PluginManifestIn(BaseModel):
     id: str = Field(min_length=3, max_length=80)
     label: str = Field(min_length=2, max_length=80)

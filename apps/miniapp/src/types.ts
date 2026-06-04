@@ -53,6 +53,28 @@ export type Readiness = {
   blockers: string[];
 };
 
+export type ReleaseCriterion = {
+  id: number;
+  title: string;
+  status: "passed" | "simulated" | "blocked" | string;
+  evidence: string[];
+  blockers: string[];
+};
+
+export type ReleaseGate = {
+  overallStatus: string;
+  simulation: boolean;
+  criteria: ReleaseCriterion[];
+  liveBlockers: string[];
+  summary: {
+    total: number;
+    passed: number;
+    simulated: number;
+    blocked: number;
+  };
+  proof: Record<string, number | boolean | string>;
+};
+
 export type WriteScopeVerificationResult = {
   accountId: string;
   scopes: string[];

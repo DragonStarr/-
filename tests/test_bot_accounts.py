@@ -46,7 +46,7 @@ def test_render_accounts_status_shows_live_blockers_in_plain_russian() -> None:
     assert "Для живых действий осталось проверить" in text
     assert "Ozon — реклама" in text
     assert "Ozon — ответы покупателям" in text
-    assert "Живой пилот пока ждёт" in text
+    assert "Живая работа пока ждёт" in text
     assert "права на реальные действия" in text
     assert "проверку модели на сервере" in text
     assert "replay" not in text.lower()

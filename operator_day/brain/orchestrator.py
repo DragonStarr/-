@@ -45,11 +45,11 @@ class MorningOrchestrator:
     async def execute_prepared(self, ctx: TenantContext, task: TaskAction) -> ActionResult:
         module = next(item for item in self.registry.modules if item.module_id == task.module_id)
         task.status = (
-            TaskStatus.FAILED
+            TaskStatus.PLANNED
             if module.__class__.execute is OperatorModule.execute
             else TaskStatus.ESCALATED
             if task.risk == ActionRisk.HUMAN
-            else TaskStatus.DONE
+            else TaskStatus.PLANNED
         )
         result = await module.execute(ctx, task, self.replay)
         task.status = result.status

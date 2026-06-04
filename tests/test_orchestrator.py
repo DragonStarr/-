@@ -55,6 +55,24 @@ class FailingReviewReplay:
         return {"mode": "database", "review_id": review_id, "status": "prepared", "answer": answer}
 
 
+class FallbackReplay:
+    async def record_operator_artifact(self, ctx, payload, *, module_id: str, task_id: str):
+        return {
+            "status": "recorded",
+            "artifact_type": payload.get("artifact_type", "operator_plan"),
+            "module_id": module_id,
+            "task_id": task_id,
+        }
+
+
+class FallbackOnlyModule(OperatorModule):
+    module_id = ModuleId.SUPERVISOR
+    title = "Fallback"
+
+    async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
+        return []
+
+
 def test_registry_contains_23_module_contracts() -> None:
     module_ids = {module.module_id for module in ModuleRegistry.default().modules}
 
@@ -300,3 +318,22 @@ async def test_local_module_records_artifact_without_marketplace_write() -> None
     assert result.audit_event["marketplace_write"] == "not_attempted"
     assert result.audit_event["artifact"]["artifact_type"] == "supply_plan"
     assert result.audit_event["execution_lifecycle"]["stages"][2]["name"] == "local_action_recorded"
+
+
+async def test_base_module_fallback_never_marks_local_plan_done() -> None:
+    ctx = TenantContext(tenant_id="fallback-tenant", user_id="owner", role=Role.OWNER)
+    task = TaskAction(
+        module_id=ModuleId.SUPERVISOR,
+        title="Проверить план",
+        short_text="Локальная запись без внешнего кабинета",
+        action_label="Сохранить",
+        payload={"artifact_type": "operator_plan"},
+        priority=1,
+        risk=ActionRisk.CONFIRM,
+    )
+
+    result = await FallbackOnlyModule().execute(ctx, task, FallbackReplay())  # type: ignore[arg-type]
+
+    assert result.status == TaskStatus.PLANNED
+    assert result.audit_event["marketplace_write"] == "not_attempted"
+    assert result.audit_event["connector_status"] == "recorded"

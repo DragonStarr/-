@@ -8,6 +8,7 @@ import type {
   MemoryItem,
   PluginManifest,
   Readiness,
+  ReleaseGate,
   Task,
   WriteScopeVerificationResult
 } from "./types";
@@ -137,6 +138,10 @@ export async function syncCatalog(accountId: string): Promise<AccountActionResul
 
 export async function getReadiness(): Promise<Readiness> {
   return request<Readiness>("/api/readiness");
+}
+
+export async function getReleaseGate(simulation = true): Promise<ReleaseGate> {
+  return request<ReleaseGate>(`/api/release-gate?simulation=${simulation ? "true" : "false"}`);
 }
 
 export async function verifyWriteScopes(

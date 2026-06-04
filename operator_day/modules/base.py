@@ -30,7 +30,7 @@ class OperatorModule(ABC):
             module_id=self.module_id.value,
             task_id=task.task_id,
         )
-        status = TaskStatus.ESCALATED if task.risk == ActionRisk.HUMAN else TaskStatus.DONE
+        status = TaskStatus.ESCALATED if task.risk == ActionRisk.HUMAN else TaskStatus.PLANNED
         user_text = (
             "Передал человеку и сохранил план в системе. В личных кабинетах ничего не менял."
             if task.risk == ActionRisk.HUMAN

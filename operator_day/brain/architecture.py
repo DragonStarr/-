@@ -90,6 +90,7 @@ class ArchitectureReviewService:
                 "/api/self-update/run",
                 "/api/brain/architecture-gate",
                 "/api/brain/llm-status",
+                "/api/release-gate",
                 "/metrics",
                 "/telegram/webhook",
             ],
@@ -141,7 +142,7 @@ class ArchitectureReviewService:
         modules = ", ".join(module.module_id.value for module in ModuleRegistry.default().modules)
         operations = ", ".join(sorted(operation_catalog().keys())[:20])
         prompt = (
-            "Проверь дерево продукта «Оператор дня» для пилота селлеров и ПВЗ. "
+            "Проверь дерево продукта «Оператор дня» для живой работы селлеров и ПВЗ. "
             "Кратко опиши поток: ЛК/API площадок -> transport/safety -> workers -> БД -> "
             "orchestrator -> Telegram bot/Mini App -> действие -> аудит. "
             f"Модули: {modules}. Операции коннекторов: {operations}. "
@@ -188,7 +189,7 @@ class ArchitectureReviewService:
                 verdict="needs_work",
                 text=(
                     "Топология собрана, но prod LLM gate не запускался. "
-                    "Для live-пилота нужна доступная локальная модель "
+                    "Для живой работы нужна доступная локальная модель "
                     "или явно включённый smoke-прогон."
                 ),
                 blockers=(disabled_reason,),

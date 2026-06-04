@@ -18,14 +18,14 @@ What is included now:
 - Owner-only architecture gate endpoint exposes the machine-readable LK/API -> transport -> workers -> DB -> orchestrator -> Telegram topology; local LLM is the primary reviewer, external OpenAI-compatible providers are optional and disabled unless explicitly enabled in env.
 - Next.js 16 Mini App/PWA with Telegram-style bottom navigation, plain Russian labels, lime/M-stripe visual language and API rewrites to the backend.
 - Celery morning collection task with retry/backoff and saved ranked tasks.
-- Optional embedded morning scheduler for one-server pilots; it refreshes the local task queue from connected/manual data without marketplace writes.
+- Optional embedded morning scheduler for one-server operation; it refreshes the local task queue from connected/manual data without marketplace writes.
 - Marketplace transport layer with operation catalog, platform host routing, path parameters, safe dry-run, safety gates, retry on 429/5xx and Ozon last_id pagination.
 - Local vendored marketplace SDK payload builders in `vendor/marketplace_sdk`, so review, price and bid write plans do not depend on GitHub repositories at runtime.
 - Catalog sync endpoint and Celery task for Ozon/WB/Yandex Market; secrets are decrypted only inside the service and never returned.
 - Synced catalog rows are saved to `products` with stock, rating, commission and raw source payload where the marketplace provides them; API and Telegram morning tasks read tenant DB data and return setup/empty states when sources are missing.
-- Manual catalog import endpoint for pilot sellers when a marketplace API is unavailable or a test account needs seed products.
+- Manual catalog import endpoint for test sellers when a marketplace API is unavailable or a test account needs seed products.
 - Sales import endpoint feeds demand forecasts from real order/sale history instead of only price/rating heuristics.
-- Review import endpoint for pilot sellers; the morning bot reads tenant reviews/questions from DB and keeps risky negative cases human-only.
+- Review import endpoint for test sellers; the morning bot reads tenant reviews/questions from DB and keeps risky negative cases human-only.
 - Source-linked claim deadline policies, so WB/Ozon/YM claim windows are not hardcoded guesses.
 - Claim candidate import endpoint; the morning bot builds reimbursement tasks from tenant DB data and marks deadlines as verified only when a source-linked policy exists.
 - PVZ point/staff import endpoint; the morning bot builds 2/2 schedules and payroll from tenant DB data instead of static employees.
@@ -35,6 +35,7 @@ What is included now:
 - Confirmed actions now carry a durable lifecycle checkpoint with collected, confirmed, marketplace planned/executed or human escalation, audit and rollback hints.
 - Self-update control plane snapshots upstream references, runs real sandbox checks, LLM review, canary gates and rollback to last-known-good.
 - Operator capability catalog: 30+ skills/plugins on every action and 10 required MCP-style checks in every action payload.
+- Final 20-point release gate separates local completion, safe simulation without external keys, and blockers before real seller/PVZ operation.
 - SQLAlchemy schema and Alembic migration skeleton for Postgres + pgvector-ready tenant isolation, including ads, claims, niches, content, semantic memory and account guard data.
 
 Local start:
@@ -52,7 +53,7 @@ npm run dev
 No real secrets belong in the repository. Put them in `.env`, never in code or docs.
 For Yandex Market accounts, pass `campaignId` when connecting the account so validation can build the safe read probe.
 
-Pilot API examples:
+API examples:
 
 - `GET /api/tasks/morning`
 - `GET /api/tasks`
@@ -72,6 +73,7 @@ Pilot API examples:
 - `POST /api/accounts/{accountId}/sync/catalog`
 - `POST /api/accounts/{accountId}/write-scopes`
 - `GET /api/readiness`
+- `GET /api/release-gate`
 - `GET /api/brain/architecture-review`
 - `GET /api/brain/architecture-gate`
 - `GET /api/brain/llm-status`
@@ -94,9 +96,15 @@ Local/test-only headers:
 
 Readiness statuses:
 
-- `ready_for_safe_pilot`: backend, bot and Mini App are usable for a safe pilot with connected/imported tenant data, but live marketplace writes remain locked.
-- `blocked_for_live_pilot`: at least one real account, claim policy, marketplace verification step or LLM architecture gate is missing before live sellers.
+- `ready_for_safe_pilot`: backend, bot and Mini App are usable for a safe test with connected/imported tenant data, but live marketplace writes remain locked.
+- `blocked_for_live_pilot`: at least one real account, claim policy, marketplace verification step or LLM architecture gate is missing before real seller/PVZ operation.
 - `ready_for_live_pilot`: accounts are validated, source-linked claim windows are present and an architecture gate pass is recorded.
+
+Final release gate:
+
+- `/api/release-gate?simulation=true` returns exactly 20 criteria and can close key-dependent checks as `simulated` when real marketplace/LLM/Git inputs are absent.
+- `/api/release-gate?simulation=false` blocks real operation until external keys, account validation, write scopes, LLM gate and Git/deployment inputs are present.
+- The Mini App shows these 20 criteria in the `Ещё` tab, so local completion is not confused with real marketplace execution.
 
 Live write readiness:
 
@@ -105,7 +113,7 @@ Live write readiness:
 
 LLM safety:
 
-- The default provider is local/offline so tests and pilots do not spend external tokens by accident.
+- The default provider is local/offline so tests do not spend external tokens by accident.
 - External LLM calls use an OpenAI-compatible endpoint from env and are treated as optional acceleration, not a hard dependency.
 - The router redacts secrets, enforces token budgets and checks the actual returned model/provider before recording a live pass.
 - `/api/brain/architecture-gate` does not spend tokens by default; `?live=true` still stays offline unless `LLM_SMOKE_ENABLED=true` and a provider key is configured.
