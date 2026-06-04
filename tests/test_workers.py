@@ -2,8 +2,10 @@ from sqlalchemy import select
 
 from operator_day.models import AuditLog, Product, Task, Tenant, User
 from operator_day.workers import scheduler
+from operator_day.workers.celery_app import celery_app
 from operator_day.workers.tasks import (
     _collect_morning_async,
+    collect_due_morning,
     collect_morning,
     sync_catalog,
     sync_ozon_catalog,
@@ -26,6 +28,16 @@ def test_sync_catalog_task_has_retry_policy() -> None:
     assert sync_catalog.autoretry_for == (Exception,)
     assert sync_catalog.retry_backoff is True
     assert sync_catalog.retry_kwargs["max_retries"] == 3
+
+
+def test_collect_due_morning_task_has_retry_policy_and_beat_schedule() -> None:
+    assert collect_due_morning.autoretry_for == (Exception,)
+    assert collect_due_morning.retry_backoff is True
+    assert collect_due_morning.retry_kwargs["max_retries"] == 3
+
+    schedule = celery_app.conf.beat_schedule["operator-day-morning-scheduler"]
+    assert schedule["task"] == "operator_day.collect_due_morning"
+    assert schedule["kwargs"]["limit"] >= 1
 
 
 async def test_collect_morning_async_persists_ranked_tasks() -> None:

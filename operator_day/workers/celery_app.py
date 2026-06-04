@@ -18,4 +18,15 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
     timezone="Europe/Moscow",
+    beat_schedule=(
+        {
+            "operator-day-morning-scheduler": {
+                "task": "operator_day.collect_due_morning",
+                "schedule": float(max(settings.morning_scheduler_interval_seconds, 60)),
+                "kwargs": {"limit": settings.morning_scheduler_limit},
+            }
+        }
+        if settings.morning_scheduler_enabled
+        else {}
+    ),
 )

@@ -24,6 +24,7 @@ class Role(StrEnum):
 class TaskStatus(StrEnum):
     NEW = "new"
     WAITING_CONFIRMATION = "waiting_confirmation"
+    PLANNED = "planned"
     DONE = "done"
     ESCALATED = "escalated"
     FAILED = "failed"
@@ -75,7 +76,7 @@ class ProductSnapshot:
     sku: str
     name: str
     price: float
-    stock: int
+    stock: int | None
     cost: float
     commission_rate: float
     rating: float = 0

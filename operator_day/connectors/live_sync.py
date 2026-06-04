@@ -236,16 +236,11 @@ def _normalize_common_product(item: dict[str, Any]) -> dict[str, Any]:
 def _normalize_wb_card(card: dict[str, Any]) -> dict[str, Any]:
     sku = card.get("vendorCode") or card.get("nmID") or card.get("imtID") or card.get("sku")
     title = card.get("title") or card.get("object") or card.get("name") or sku
-    price = card.get("price")
-    sizes = card.get("sizes")
-    if price is None and isinstance(sizes, list) and sizes:
-        first_size = sizes[0]
-        if isinstance(first_size, dict):
-            price = first_size.get("price") or first_size.get("discountedPrice")
+    price = _wb_price(card)
     return {
         "sku": str(sku or ""),
         "title": str(title or sku or ""),
-        "price": _number(price),
+        "price": price,
         "cost": _number(card.get("cost")),
         "stock": _number(
             card.get("stock")
@@ -278,6 +273,7 @@ def _normalize_yandex_offer(offer: dict[str, Any]) -> dict[str, Any]:
         "stock": _number(
             offer.get("stock")
             or offer.get("quantity")
+            or _first_stock_count(offer.get("stocks"))
             or _nested_get(offer, "available.value")
             or _nested_get(offer, "stock.value")
         ),
@@ -311,6 +307,43 @@ def _nested_get(payload: dict[str, Any], path: str) -> Any:
             return None
         current = current.get(part)
     return current
+
+
+def _first_stock_count(value: Any) -> Any:
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return (
+            value[0].get("count")
+            or value[0].get("quantity")
+            or value[0].get("available")
+            or value[0].get("stock")
+        )
+    return None
+
+
+def _wb_price(card: dict[str, Any]) -> float:
+    value, in_minor_units = _wb_price_value(card)
+    amount = _number(value)
+    return round(amount / 100, 2) if in_minor_units else amount
+
+
+def _wb_price_value(card: dict[str, Any]) -> tuple[Any, bool]:
+    for key in ("priceU", "discountedPriceU"):
+        if card.get(key) is not None:
+            return card.get(key), True
+    for key in ("price", "discountedPrice"):
+        if card.get(key) is not None:
+            return card.get(key), False
+    sizes = card.get("sizes")
+    if isinstance(sizes, list) and sizes:
+        first_size = sizes[0]
+        if isinstance(first_size, dict):
+            for key in ("priceU", "discountedPriceU"):
+                if first_size.get(key) is not None:
+                    return first_size.get(key), True
+            for key in ("price", "discountedPrice"):
+                if first_size.get(key) is not None:
+                    return first_size.get(key), False
+    return None, False
 
 
 def _number(value: Any) -> float:

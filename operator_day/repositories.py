@@ -494,13 +494,13 @@ class UserRepository:
         self.session = session
 
     async def context_for_telegram(self, tg_id: str, name: str = "") -> TenantContext:
-        provisional = TenantContext(tenant_id=f"tg-{tg_id}", user_id=tg_id, role=Role.OWNER)
-        await bind_tenant_scope(self.session, provisional)
         row = (
             await self.session.execute(select(User).where(User.tg_id == tg_id).limit(1))
         ).scalar_one_or_none()
         if row is not None:
-            return TenantContext(tenant_id=row.tenant_id, user_id=row.id, role=Role(row.role))
+            ctx = TenantContext(tenant_id=row.tenant_id, user_id=row.id, role=Role(row.role))
+            await bind_tenant_scope(self.session, ctx)
+            return ctx
 
         tenant = Tenant(id=f"tg-{tg_id}", title=name or f"Telegram {tg_id}", plan="pilot")
         user = User(
@@ -512,7 +512,9 @@ class UserRepository:
         self.session.add(tenant)
         self.session.add(user)
         await self.session.commit()
-        return TenantContext(tenant_id=tenant.id, user_id=user.id, role=Role.OWNER)
+        ctx = TenantContext(tenant_id=tenant.id, user_id=user.id, role=Role.OWNER)
+        await bind_tenant_scope(self.session, ctx)
+        return ctx
 
 
 class ClaimPolicyRepository:

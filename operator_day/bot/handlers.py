@@ -30,7 +30,6 @@ from operator_day.repositories import (
 )
 
 router = Router()
-orchestrator = MorningOrchestrator()
 
 
 async def user_context(message: Message | CallbackQuery) -> TenantContext:
@@ -141,10 +140,7 @@ async def confirm_task(callback: CallbackQuery) -> None:
             await callback.answer("Уже записано")
             await callback.message.answer(existing.user_text)  # type: ignore[union-attr]
             return
-        try:
-            task = orchestrator.get_task(task_id)
-        except KeyError:
-            task = await repo.get_task(ctx, task_id)
+        task = await repo.get_task(ctx, task_id)
         if task is None:
             await callback.answer("Дело уже не найдено", show_alert=True)
             return
@@ -169,10 +165,7 @@ async def show_task(callback: CallbackQuery) -> None:
     task_id = callback.data.split(":")[-1] if callback.data else ""
     ctx = await user_context(callback)
     async with get_sessionmaker()() as session:
-        try:
-            task = orchestrator.get_task(task_id)
-        except KeyError:
-            task = await TaskRepository(session).get_task(ctx, task_id)
+        task = await TaskRepository(session).get_task(ctx, task_id)
     if task is None:
         await callback.answer("Дело уже не найдено", show_alert=True)
         return

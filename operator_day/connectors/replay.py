@@ -309,7 +309,7 @@ class DatabaseReplayHub(ReplayHub):
                 sku=row.sku,
                 name=row.title,
                 price=row.price,
-                stock=stocks_by_product.get(row.id, _int_from_payload(row.payload, "stock")),
+                stock=stocks_by_product.get(row.id),
                 cost=row.cost,
                 commission_rate=float(row.commission_rate or 0),
                 rating=_rating_for_product(row, ratings_by_sku),

@@ -8,6 +8,7 @@ from operator_day.connectors.replay import DatabaseReplayHub
 from operator_day.db import ensure_local_database, get_sessionmaker
 from operator_day.domain import Role, TenantContext
 from operator_day.repositories import TaskRepository
+from operator_day.workers import scheduler
 from operator_day.workers.celery_app import celery_app
 
 
@@ -62,6 +63,18 @@ def sync_ozon_catalog(
     return asyncio.run(_sync_catalog_async(tenant_id, account_id, user_id, role))
 
 
+@celery_app.task(
+    name="operator_day.collect_due_morning",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
+def collect_due_morning(limit: int = 10) -> dict:
+    return asyncio.run(_collect_due_morning_for_tenants_async(limit))
+
+
 async def _collect_morning_async(
     tenant_id: str,
     user_id: str,
@@ -112,3 +125,15 @@ async def _sync_ozon_catalog_async(
     role: str,
 ) -> dict:
     return await _sync_catalog_async(tenant_id, account_id, user_id, role)
+
+
+async def _collect_due_morning_for_tenants_async(limit: int) -> dict:
+    await ensure_local_database()
+    result = await scheduler.collect_due_morning(limit=limit)
+    return {
+        "status": "saved",
+        "tenants": result.tenants,
+        "tasks": result.tasks,
+        "notifications": result.notifications,
+        "notification_errors": result.notification_errors,
+    }

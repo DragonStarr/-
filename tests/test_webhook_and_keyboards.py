@@ -92,10 +92,6 @@ async def test_bot_confirm_masks_marketplace_failure_without_saving(monkeypatch)
     )
     saved: list[str] = []
 
-    class FakeOrchestratorCache:
-        def get_task(self, task_id: str):
-            raise KeyError(task_id)
-
     class FakeMorningOrchestrator:
         def __init__(self, *args, **kwargs) -> None:
             pass
@@ -149,7 +145,6 @@ async def test_bot_confirm_masks_marketplace_failure_without_saving(monkeypatch)
         fake_user_context,
     )
     monkeypatch.setattr(handlers, "get_sessionmaker", lambda: lambda: FakeSessionContext())
-    monkeypatch.setattr(handlers, "orchestrator", FakeOrchestratorCache())
     monkeypatch.setattr(handlers, "MorningOrchestrator", FakeMorningOrchestrator)
     monkeypatch.setattr(handlers, "TaskRepository", FakeRepo)
 
@@ -170,11 +165,6 @@ async def test_bot_confirm_reuses_existing_execution_without_repeating_action(mo
         user_text="Уже записано раньше.",
         audit_event={"action": "already_done"},
     )
-
-    class FakeOrchestratorCache:
-        def get_task(self, task_id: str):
-            calls.append("get_task")
-            raise KeyError(task_id)
 
     class FakeMorningOrchestrator:
         def __init__(self, *args, **kwargs) -> None:
@@ -227,7 +217,6 @@ async def test_bot_confirm_reuses_existing_execution_without_repeating_action(mo
 
     monkeypatch.setattr(handlers, "user_context", fake_user_context)
     monkeypatch.setattr(handlers, "get_sessionmaker", lambda: lambda: FakeSessionContext())
-    monkeypatch.setattr(handlers, "orchestrator", FakeOrchestratorCache())
     monkeypatch.setattr(handlers, "MorningOrchestrator", FakeMorningOrchestrator)
     monkeypatch.setattr(handlers, "TaskRepository", FakeRepo)
 

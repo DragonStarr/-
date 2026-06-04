@@ -21,3 +21,26 @@ async def test_telegram_identity_creates_isolated_tenant(session_factory) -> Non
     assert first.role == Role.OWNER
     assert len(tenants) == 2
     assert len(users) == 2
+
+
+async def test_existing_telegram_identity_keeps_stored_tenant_and_role(
+    session_factory,
+) -> None:
+    async with session_factory() as session:
+        session.add(Tenant(id="seller-existing", title="Existing seller"))
+        session.add(
+            User(
+                id="manager-existing",
+                tenant_id="seller-existing",
+                tg_id="20001",
+                role=Role.MANAGER.value,
+                name="Manager",
+            )
+        )
+        await session.commit()
+
+        ctx = await UserRepository(session).context_for_telegram("20001", "Ignored")
+
+    assert ctx.tenant_id == "seller-existing"
+    assert ctx.user_id == "manager-existing"
+    assert ctx.role == Role.MANAGER

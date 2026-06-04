@@ -67,6 +67,17 @@ async def test_api_accepts_signed_session_outside_local(monkeypatch) -> None:
 
 async def test_telegram_auth_endpoint_issues_session(monkeypatch) -> None:
     _prod_env(monkeypatch)
+
+    class FakeUserRepository:
+        def __init__(self, session) -> None:
+            pass
+
+        async def context_for_telegram(self, tg_id: str, name: str = "") -> TenantContext:
+            assert tg_id == "777"
+            assert name
+            return TenantContext("seller-777", "owner-777", Role.OWNER)
+
+    monkeypatch.setattr("operator_day.api.routes.UserRepository", FakeUserRepository)
     init_data = _signed_init_data(
         "123456:telegram-token-for-test",
         {"id": 777, "first_name": "Мария"},
@@ -88,7 +99,8 @@ async def test_telegram_auth_endpoint_issues_session(monkeypatch) -> None:
         get_settings.cache_clear()
 
     assert auth.status_code == 200
-    assert auth.json()["tenantId"] == "tg-777"
+    assert auth.json()["tenantId"] == "seller-777"
+    assert auth.json()["role"] == "owner"
     assert status.status_code == 200
 
 

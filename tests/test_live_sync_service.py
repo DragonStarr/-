@@ -142,6 +142,35 @@ async def test_sync_wb_catalog_for_account_normalizes_cards(session_factory) -> 
     assert "wb-secret-token" not in str(audit[-1].before_after)
 
 
+async def test_sync_wb_catalog_converts_minor_price_units(session_factory) -> None:
+    ctx = TenantContext(tenant_id="sync-wb-price-u", user_id="owner", role=Role.OWNER)
+
+    async def fake_loader(credentials):
+        return {
+            "cards": [
+                {
+                    "vendorCode": "WB-KOPECKS",
+                    "title": "WB kopeck product",
+                    "sizes": [{"priceU": 149900}],
+                    "totalQuantity": 3,
+                }
+            ]
+        }
+
+    async with session_factory() as session:
+        account = await AccountRepository(session).connect_account(
+            ctx,
+            platform="wb",
+            title="WB",
+            secret="wb-secret-token",
+            metadata={},
+        )
+        await sync_catalog_for_account(session, ctx, account.account_id, loader=fake_loader)
+        product = (await session.execute(select(Product))).scalar_one()
+
+    assert product.price == 1499
+
+
 async def test_sync_yandex_catalog_for_account_normalizes_offers(session_factory) -> None:
     ctx = TenantContext(tenant_id="sync-ym", user_id="owner", role=Role.OWNER)
 
@@ -154,6 +183,7 @@ async def test_sync_yandex_catalog_for_account_normalizes_offers(session_factory
                         "offerId": "YM-1",
                         "name": "Yandex product",
                         "price": {"value": 777},
+                        "stocks": [{"type": "FIT", "count": 11}],
                     }
                 ]
             }
@@ -174,12 +204,14 @@ async def test_sync_yandex_catalog_for_account_normalizes_offers(session_factory
             loader=fake_loader,
         )
         product = (await session.execute(select(Product))).scalar_one()
+        stock = (await session.execute(select(Stock))).scalar_one()
 
     assert result["source"] == "ym"
     assert result["count"] == 1
     assert product.sku == "YM-1"
     assert product.title == "Yandex product"
     assert product.price == 777
+    assert stock.quantity == 11
 
 
 async def test_plan_catalog_sync_returns_safe_dry_run_without_secret(session_factory) -> None:
@@ -339,6 +371,39 @@ async def test_database_replay_products_use_stock_rating_commission_and_sales(
     assert snapshot.data_sources["stock"] == "stocks"
     assert snapshot.data_sources["daily_sales"] == "sales"
     assert len(sale_rows) == 1
+
+
+async def test_database_replay_products_keep_missing_stock_unknown(
+    session_factory,
+) -> None:
+    ctx = TenantContext(tenant_id="replay-missing-stock", user_id="owner", role=Role.OWNER)
+    async with session_factory() as session:
+        account = await AccountRepository(session).connect_account(
+            ctx,
+            platform="ozon",
+            title="Ozon",
+            secret="seller-secret",
+            metadata={"client_id": "client-1"},
+        )
+        session.add(
+            Product(
+                tenant_id=ctx.tenant_id,
+                account_id=account.account_id,
+                sku="NO-STOCK",
+                title="No stock product",
+                category="ozon",
+                price=1000,
+                cost=700,
+                commission_rate=0.12,
+                rating=4.5,
+                payload={},
+            )
+        )
+        await session.commit()
+        snapshot = (await DatabaseReplayHub(session, ctx).products())[0]
+
+    assert snapshot.stock is None
+    assert snapshot.data_sources["stock"] == "missing"
 
 
 async def _catalog_loader_with_real_metrics():

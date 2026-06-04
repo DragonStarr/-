@@ -164,7 +164,7 @@ class MarketplaceTransport:
 
     @staticmethod
     def _should_retry(status_code: int) -> bool:
-        return status_code == 429 or 500 <= status_code < 600
+        return status_code in {420, 429} or 500 <= status_code < 600
 
     @staticmethod
     def _retry_delay(response: httpx.Response, attempt: int) -> float:

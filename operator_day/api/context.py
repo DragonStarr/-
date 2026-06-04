@@ -6,10 +6,12 @@ from typing import Annotated
 from fastapi import Header, HTTPException
 
 from operator_day.config import get_settings
+from operator_day.db import ensure_local_database, get_sessionmaker
 from operator_day.domain import Role, TenantContext
+from operator_day.repositories import UserRepository
 from operator_day.security import (
     AuthError,
-    tenant_context_from_telegram_init_data,
+    telegram_identity_from_init_data,
     verify_session_token,
     verify_telegram_init_data,
 )
@@ -45,7 +47,10 @@ async def get_tenant_context(
                 settings.telegram_bot_token,
                 ttl_seconds=settings.telegram_web_app_auth_ttl_seconds,
             )
-            return tenant_context_from_telegram_init_data(values)
+            tg_id, name = telegram_identity_from_init_data(values)
+            await ensure_local_database()
+            async with get_sessionmaker()() as session:
+                return await UserRepository(session).context_for_telegram(tg_id, name)
     except AuthError as exc:
         raise HTTPException(status_code=401, detail="Invalid API auth") from exc
 

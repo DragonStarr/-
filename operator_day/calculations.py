@@ -51,7 +51,7 @@ def unit_math(product: ProductSnapshot) -> UnitMath:
 def listing_quality_score(product: ProductSnapshot) -> int:
     title_score = min(len(product.name.strip()) / 80, 1) * 30
     rating_score = _clamp(product.rating / 5, 0, 1) * 30
-    stock_score = _clamp(product.stock / 30, 0, 1) * 20
+    stock_score = _clamp(_known_stock(product) / 30, 0, 1) * 20
     margin_score = _clamp(unit_math(product).margin_rate / 0.35, 0, 1) * 20
     return round(title_score + rating_score + stock_score + margin_score)
 
@@ -61,7 +61,7 @@ def estimate_daily_sales(product: ProductSnapshot) -> float:
         return round(max(0.4, product.daily_sales), 2)
     price_factor = _clamp(1000 / max(product.price, 1), 0.35, 2.5)
     rating_factor = _clamp(product.rating / 4.5 if product.rating else 0.75, 0.5, 1.2)
-    stock_pressure = 1.6 if product.stock <= 4 else 1.0
+    stock_pressure = 1.6 if product.stock is not None and product.stock <= 4 else 1.0
     return round(max(0.4, price_factor * rating_factor * stock_pressure), 2)
 
 
@@ -73,6 +73,8 @@ def reorder_quantity(
 ) -> int:
     demand = estimate_daily_sales(product)
     target_stock = ceil(demand * max(cover_days + safety_stock_days, 1))
+    if product.stock is None:
+        return 0
     return max(0, target_stock - max(product.stock, 0))
 
 
@@ -125,7 +127,7 @@ def ad_bid_plan(
     localization_index: float,
 ) -> BidPlan:
     math = unit_math(product)
-    stock_factor = _clamp(product.stock / 30, 0.25, 1)
+    stock_factor = _clamp(_known_stock(product) / 30, 0.25, 1)
     conversion_probability = _clamp(
         0.015 + (product.rating / 5) * 0.055 + math.margin_rate * 0.08,
         0.01,
@@ -161,7 +163,7 @@ def forecast_money_effect(product: ProductSnapshot, quantity: int) -> float:
 def reprice_money_effect(product: ProductSnapshot, plan: RepricePlan) -> float:
     current_margin = unit_math(product).gross_margin
     margin_delta = max(plan.expected_margin - current_margin, 0)
-    affected_units = max(min(product.stock, 30), 1)
+    affected_units = max(min(_known_stock(product), 30), 1)
     return round(margin_delta * affected_units, 2)
 
 
@@ -187,3 +189,7 @@ def confidence_from_inputs(
 
 def _clamp(value: float, lower: float, upper: float) -> float:
     return max(lower, min(value, upper))
+
+
+def _known_stock(product: ProductSnapshot) -> int:
+    return max(int(product.stock), 0) if product.stock is not None else 0

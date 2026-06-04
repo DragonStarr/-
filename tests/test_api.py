@@ -38,6 +38,19 @@ async def test_morning_and_confirm_flow() -> None:
     assert feedback_response.json()["status"] == "saved"
 
 
+async def test_confirm_only_reads_persisted_task_store() -> None:
+    headers = {"X-Tenant-Id": "api-no-process-cache", "X-User-Id": "owner", "X-Role": "owner"}
+    async with AsyncClient(
+        transport=ASGITransport(app=create_app()), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/tasks/not-saved-in-db/confirm",
+            headers=headers,
+        )
+
+    assert response.status_code == 404
+
+
 async def test_confirm_masks_marketplace_failure_without_execution_record(monkeypatch) -> None:
     headers = {
         "X-Tenant-Id": "api-marketplace-failure",

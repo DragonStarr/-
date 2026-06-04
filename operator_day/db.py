@@ -62,13 +62,24 @@ async def bind_tenant_scope(
     *,
     database_url: str | None = None,
 ) -> None:
-    url = database_url or str(get_engine().url)
+    url = database_url or _session_database_url(session) or str(get_engine().url)
     if url.startswith("sqlite"):
         return
     await session.execute(
         text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
         {"tenant_id": ctx.tenant_id},
     )
+
+
+def _session_database_url(session) -> str | None:
+    bind = getattr(session, "bind", None)
+    if bind is None:
+        try:
+            bind = session.get_bind()
+        except Exception:
+            bind = None
+    url = getattr(bind, "url", None)
+    return str(url) if url is not None else None
 
 
 async def dispose_engine() -> None:

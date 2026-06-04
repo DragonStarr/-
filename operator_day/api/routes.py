@@ -88,11 +88,12 @@ from operator_day.repositories import (
     SalesRepository,
     SelfUpdateRepository,
     TaskRepository,
+    UserRepository,
 )
 from operator_day.security import (
     AuthError,
     create_session_token,
-    tenant_context_from_telegram_init_data,
+    telegram_identity_from_init_data,
     verify_telegram_init_data,
 )
 from operator_day.selfupdate.pipeline import SelfUpdatePipeline
@@ -100,7 +101,6 @@ from operator_day.skills_catalog import CORE_MCP_CHECKS, all_operator_capabiliti
 from operator_day.telemetry.metrics import render_prometheus_metrics
 
 router = APIRouter()
-orchestrator = MorningOrchestrator()
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ContextDep = Annotated[TenantContext, Depends(get_tenant_context)]
 
@@ -111,7 +111,7 @@ async def health() -> dict[str, str]:
 
 
 @router.post("/api/auth/telegram", response_model=AuthSessionOut)
-async def auth_telegram(payload: TelegramAuthIn) -> AuthSessionOut:
+async def auth_telegram(payload: TelegramAuthIn, session: SessionDep) -> AuthSessionOut:
     settings = get_settings()
     try:
         values = verify_telegram_init_data(
@@ -119,7 +119,8 @@ async def auth_telegram(payload: TelegramAuthIn) -> AuthSessionOut:
             settings.telegram_bot_token,
             ttl_seconds=settings.telegram_web_app_auth_ttl_seconds,
         )
-        ctx = tenant_context_from_telegram_init_data(values)
+        tg_id, name = telegram_identity_from_init_data(values)
+        ctx = await UserRepository(session).context_for_telegram(tg_id, name)
         token = create_session_token(
             ctx,
             settings.app_session_secret,
@@ -166,10 +167,7 @@ async def confirm_task(
     existing = await repo.get_execution(ctx, task_id, idempotency_key)
     if existing is not None:
         return _confirm_out(existing)
-    try:
-        task = orchestrator.get_task(task_id)
-    except KeyError:
-        task = await repo.get_task(ctx, task_id)
+    task = await repo.get_task(ctx, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Дело не найдено")
     ensure_can_confirm(ctx, task)

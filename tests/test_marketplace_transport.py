@@ -77,6 +77,36 @@ async def test_transport_retries_429_then_returns_success() -> None:
     assert all(delay >= 0 for delay in sleeps)
 
 
+async def test_transport_retries_yandex_market_420_then_returns_success() -> None:
+    attempts = 0
+    sleeps = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(420, headers={"Retry-After": "0"}, json={"error": "limit"})
+        return httpx.Response(200, json={"status": "OK", "result": {"offerPrices": []}})
+
+    async def sleeper(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    transport = MarketplaceTransport(
+        MarketplaceCredentials(platform="ym", api_key="ym-secret"),
+        http_transport=httpx.MockTransport(handler),
+        sleep=sleeper,
+    )
+
+    response = await transport.call_operation(
+        "YM_GetOfferPrices",
+        {"campaign_id": 321, "limit": 1},
+    )
+
+    assert response["status"] == "OK"
+    assert attempts == 2
+    assert sleeps[-1] == 0
+
+
 async def test_transport_adds_idempotency_header_for_write() -> None:
     seen = {}
 

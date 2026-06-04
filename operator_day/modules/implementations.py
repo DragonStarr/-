@@ -154,6 +154,14 @@ def _operation_result_text(
     return live_text if operation_result.get("live") is True else planned_text
 
 
+def _operation_status(operation_result: dict[str, object]) -> TaskStatus:
+    return TaskStatus.DONE if operation_result.get("live") is True else TaskStatus.PLANNED
+
+
+def _has_stock(product) -> bool:
+    return product.stock is not None
+
+
 def _record_text(record: dict, *keys: str, default: str = "") -> str:
     payload = record.get("payload") if isinstance(record.get("payload"), dict) else {}
     for key in keys:
@@ -204,7 +212,7 @@ class AccountsModule(OperatorModule):
                     missing_data=["catalog", "stocks", "sales"],
                 )
             ]
-        low_stock = [p for p in products if p.stock <= 4]
+        low_stock = [p for p in products if _has_stock(p) and p.stock <= 4]
         text = f"Каталог собран: {len(products)} товаров. Мало остатков: {len(low_stock)}."
         return [_action(self.module_id, "Проверить каталог", text, "Показать", 70, ActionRisk.SAFE)]
 
@@ -306,7 +314,7 @@ class SuppliesModule(OperatorModule):
     title = "Поставки и штрихкоды"
 
     async def collect_actions(self, ctx: TenantContext, replay: ReplayHub) -> list[TaskAction]:
-        low_stock = [p for p in await replay.products() if p.stock <= 4]
+        low_stock = [p for p in await replay.products() if _has_stock(p) and p.stock <= 4]
         reorder_rows = [
             {"sku": product.sku, "quantity": reorder_quantity(product)}
             for product in low_stock
@@ -424,7 +432,7 @@ class ReviewsModule(OperatorModule):
         send_result = await replay.send_review_answer(review_id, draft.answer)
         return ActionResult(
             task_id=task.task_id,
-            status=task.status,
+            status=_operation_status(operation_result),
             user_text=_operation_result_text(
                 operation_result,
                 live_text="Ответ отправлен в кабинет и записан в журнал.",
@@ -509,7 +517,10 @@ class RepricerModule(OperatorModule):
         product = next(
             (
                 item
-                for item in sorted(products, key=lambda item: item.stock)
+                for item in sorted(
+                    products,
+                    key=lambda item: item.stock if item.stock is not None else 10**9,
+                )
                 if item.platform in {Platform.OZON, Platform.WB}
             ),
             None,
@@ -555,7 +566,7 @@ class RepricerModule(OperatorModule):
         )
         return ActionResult(
             task_id=task.task_id,
-            status=task.status,
+            status=_operation_status(operation_result),
             user_text=_operation_result_text(
                 operation_result,
                 live_text="Новую цену отправил в кабинет и записал в журнал.",
@@ -688,7 +699,10 @@ class ForecastModule(OperatorModule):
         products = await replay.products()
         if not products:
             return []
-        product = min(products, key=lambda p: p.stock)
+        products = [product for product in products if _has_stock(product)]
+        if not products:
+            return []
+        product = min(products, key=lambda p: p.stock or 0)
         quantity = reorder_quantity(product)
         distribution = warehouse_distribution(quantity, localization_index=0.72)
         return [
@@ -1152,7 +1166,7 @@ class AdsModule(OperatorModule):
         )
         return ActionResult(
             task_id=task.task_id,
-            status=task.status,
+            status=_operation_status(operation_result),
             user_text=_operation_result_text(
                 operation_result,
                 live_text="Ставку отправил в кабинет и записал в журнал.",
@@ -1423,7 +1437,7 @@ class AccountGuardModule(OperatorModule):
         )
         return ActionResult(
             task_id=task.task_id,
-            status=task.status,
+            status=_operation_status(operation_result),
             user_text=_operation_result_text(
                 operation_result,
                 live_text="Кампанию остановил в рекламном кабинете и записал в журнал.",

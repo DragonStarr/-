@@ -108,7 +108,7 @@ def verify_telegram_init_data(
     return values
 
 
-def tenant_context_from_telegram_init_data(values: dict[str, Any]) -> TenantContext:
+def telegram_identity_from_init_data(values: dict[str, Any]) -> tuple[str, str]:
     raw_user = values.get("user") or "{}"
     try:
         user = json.loads(str(raw_user))
@@ -117,6 +117,16 @@ def tenant_context_from_telegram_init_data(values: dict[str, Any]) -> TenantCont
     tg_id = str(user.get("id") or "").strip()
     if not tg_id:
         raise AuthError("telegram user id is missing")
+    name = " ".join(
+        str(user.get(key) or "").strip()
+        for key in ("first_name", "last_name")
+        if str(user.get(key) or "").strip()
+    )
+    return tg_id, name or str(user.get("username") or "").strip()
+
+
+def tenant_context_from_telegram_init_data(values: dict[str, Any]) -> TenantContext:
+    tg_id, _name = telegram_identity_from_init_data(values)
     return TenantContext(
         tenant_id=f"tg-{tg_id}",
         user_id=tg_id,
