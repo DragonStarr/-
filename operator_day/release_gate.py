@@ -163,7 +163,12 @@ async def build_release_gate(
             17,
             "Automated tests across product directions",
             passed=_test_surface_present(root),
-            evidence=["backend, API, live-sync, readiness, bot and Mini App checks are present"],
+            evidence=[
+                (
+                    "backend, API, live-sync, seller/PVZ rehearsal, readiness, "
+                    "bot and Mini App checks are present"
+                )
+            ],
         ),
         _criterion(
             18,
@@ -334,6 +339,7 @@ def _test_surface_present(root: Path) -> bool:
         "test_orchestrator.py",
         "test_readiness.py",
         "test_live_sync_service.py",
+        "test_simulated_real_seller_flow.py",
         "test_webhook_and_keyboards.py",
     ]
     tests_dir = root / "tests"
