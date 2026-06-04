@@ -80,6 +80,19 @@ def test_every_operator_module_has_explicit_execution_contract() -> None:
     assert inherited_fallbacks == []
 
 
+async def test_every_collected_action_has_specific_artifact_type() -> None:
+    ctx = TenantContext(tenant_id="t1", user_id="u1", role=Role.OWNER)
+    tasks = await MorningOrchestrator().collect_all(ctx)
+
+    generic_artifacts = [
+        (task.module_id.value, task.title)
+        for task in tasks
+        if task.payload.get("artifact_type") == "operator_plan"
+    ]
+
+    assert generic_artifacts == []
+
+
 async def test_morning_top_returns_five_ranked_actions() -> None:
     ctx = TenantContext(tenant_id="t1", user_id="u1", role=Role.OWNER)
     tasks = await MorningOrchestrator().morning_top(ctx)

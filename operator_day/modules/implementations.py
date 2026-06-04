@@ -50,6 +50,7 @@ _ARTIFACT_BY_MODULE = {
     ModuleId.SUPPLIES: "supply_plan",
     ModuleId.REVIEWS: "review_reply_draft",
     ModuleId.COMPETITORS: "competitor_watch",
+    ModuleId.REPRICER: "repricer_plan",
     ModuleId.FINANCE: "finance_reconciliation",
     ModuleId.ANTIFRAUD: "antifraud_case",
     ModuleId.FORECAST: "forecast_plan",
@@ -60,9 +61,11 @@ _ARTIFACT_BY_MODULE = {
     ModuleId.SUPERVISOR: "supervisor_check",
     ModuleId.LEARNING: "learning_update",
     ModuleId.RADAR: "knowledge_proposal",
+    ModuleId.ADS: "ad_bid_plan",
     ModuleId.CLAIMS: "claim_draft",
     ModuleId.NICHES: "niche_snapshot",
     ModuleId.CONTENT: "content_brief",
+    ModuleId.ACCOUNT_GUARD: "account_guard_case",
 }
 
 
