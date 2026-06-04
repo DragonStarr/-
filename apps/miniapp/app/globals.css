@@ -68,7 +68,7 @@ button {
   height: 100svh;
   max-height: 100svh;
   margin: 0 auto;
-  padding: calc(13px + env(safe-area-inset-top)) 14px calc(88px + env(safe-area-inset-bottom));
+  padding: calc(12px + env(safe-area-inset-top)) 10px calc(92px + env(safe-area-inset-bottom));
   overflow: hidden;
   background:
     linear-gradient(145deg, rgba(32, 152, 255, 0.08), transparent 24%),
@@ -227,8 +227,8 @@ button {
 
 .hero-wallet {
   flex: 0 0 auto;
-  margin: 18px 0 20px;
-  padding: 22px 18px 18px;
+  margin: 18px 0 16px;
+  padding: 20px 14px 14px;
   overflow: hidden;
   background:
     linear-gradient(125deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025) 48%, rgba(168, 255, 20, 0.08)),
@@ -253,9 +253,9 @@ button {
 
 .hero-head strong {
   display: block;
-  margin-top: 11px;
+  margin-top: 9px;
   color: #ffffff;
-  font-size: clamp(44px, 13vw, 58px);
+  font-size: clamp(42px, 12.4vw, 56px);
   line-height: 0.95;
   font-weight: 950;
   letter-spacing: 0;
@@ -292,8 +292,8 @@ button {
   display: block;
   width: 54%;
   min-width: 210px;
-  height: 86px;
-  margin: -18px 4px 4px auto;
+  height: 76px;
+  margin: -14px 4px 2px auto;
   overflow: visible;
 }
 
@@ -320,8 +320,8 @@ button {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
-  margin-top: 8px;
-  padding-top: 14px;
+  margin-top: 6px;
+  padding-top: 12px;
   border-top: 1px dashed rgba(255, 255, 255, 0.18);
 }
 
@@ -368,15 +368,15 @@ button {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 14px;
 }
 
 .quick-action {
   display: grid;
   gap: 8px;
   place-items: center;
-  min-height: 84px;
-  padding: 10px 7px;
+  min-height: 72px;
+  padding: 8px 6px;
   color: #ffffff;
   cursor: pointer;
   background:
@@ -417,7 +417,7 @@ button {
   display: flex;
   gap: 7px;
   align-items: center;
-  margin-top: 13px;
+  margin-top: 10px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 720;
@@ -430,7 +430,7 @@ button {
 .content {
   flex: 1 1 auto;
   min-height: 0;
-  padding-bottom: 14px;
+  padding-bottom: 22px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -443,11 +443,11 @@ button {
 }
 
 .view-stack {
-  padding-bottom: 14px;
+  padding-bottom: 22px;
 }
 
 .task-list {
-  padding-bottom: 14px;
+  padding-bottom: 36px;
 }
 
 .section-head {
