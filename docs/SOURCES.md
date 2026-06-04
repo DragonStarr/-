@@ -1,4 +1,4 @@
-# Проверенные источники на 2026-06-03
+# Проверенные источники на 2026-06-04
 
 ## Официальные документы
 
@@ -28,6 +28,9 @@
 - Ozon TS SDK candidate: `salacoste/ozon-daytona-seller-api` - broad method coverage.
 - WB references: `Jerardx/wildberries-mcp-server`, `Gueriero/wb_wildberries_api_swagger`, `dapi/wbcli`, `Refusned/wb-price-tracker-bot`.
 - Yandex official OpenAPI repo: `yandex-market/yandex-market-partner-api`, updated on 2026-06-02 in GitHub search.
+- Yandex official OpenAPI repo rechecked on 2026-06-04 through GitHub structure: repo updated/pushed on 2026-06-04 and contains `openapi/paths/v2_campaigns_campaignId_offer-prices.yaml`, `openapi/paths/v2_businesses_businessId_bids.yaml`, `openapi/paths/v2_businesses_businessId_bids_info.yaml`.
+- Ozon price write endpoint rechecked on 2026-06-04 through official Ozon help/search results: `POST /v1/product/import/prices` remains the source-linked price update operation; live use still requires seller credential validation and dry-run plan first.
+- WB promotion endpoints rechecked on 2026-06-04 through `dev.wildberries.ru/ru/openapi/promotion`: campaign list/count and pause paths include `/adv/v1/promotion/count` and `/adv/v0/pause`; live ad writes remain blocked until account scopes and limits are verified.
 - aiogram/FastAPI references: `m-xim/aiogram-webhook`, `bralbral/fastapi_aiogram_template`.
 - LLM gateway: `BerriAI/litellm`.
 - Memory references: `pgvector/pgvector`, `smaramwbc/statewave`, `alibaizhanov/mengram`.
