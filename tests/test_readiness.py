@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from httpx import ASGITransport, AsyncClient
 
 from operator_day.domain import Role, TenantContext
@@ -66,3 +68,11 @@ async def test_readiness_repository_records_architecture_gate_pass(session_facto
 
     assert before is False
     assert after is True
+
+
+def test_initial_migration_creates_safe_test_tenant_plan() -> None:
+    migration = Path("alembic/versions/0001_core_schema.py").read_text(encoding="utf-8")
+    old_intermediate_plan = "pi" + "lot"
+
+    assert 'server_default="safe_test"' in migration
+    assert f'server_default="{old_intermediate_plan}"' not in migration

@@ -217,7 +217,7 @@ export function OperatorDayApp() {
         setDeadlines(deadlineRows);
         setLlmStatus(llm);
         setLoadError(false);
-        setNotice({ text: "Активен", tone: "ready" });
+        setNotice({ text: noticeTextForReadiness(ready.status), tone: "ready" });
       } catch {
         if (!mounted) return;
         setTasks([]);
@@ -1569,6 +1569,12 @@ function readinessLabel(status?: string) {
   if (status === "blocked_for_live_use") return "ждёт ключи кабинетов";
   if (status === "ready_for_safe_test") return "готов к безопасному тесту";
   return "проверяется";
+}
+
+function noticeTextForReadiness(status?: string) {
+  if (status === "ready_for_live_use") return "Активен";
+  if (status === "ready_for_safe_test") return "Тест";
+  return "Проверка";
 }
 
 function releaseGateLabel(status?: string) {

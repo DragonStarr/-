@@ -17,13 +17,9 @@ class ConnectorHealth:
 class MarketplaceClient(ABC):
     platform: Platform
 
+    @abstractmethod
     async def validate_capabilities(self) -> ConnectorHealth:
-        return ConnectorHealth(
-            platform=self.platform,
-            mode="unknown",
-            capabilities={},
-            limitations=("capability validation is not implemented",),
-        )
+        """Return connector health, available read/write scopes and live limitations."""
 
     @abstractmethod
     async def list_products(self) -> list[ProductSnapshot]:

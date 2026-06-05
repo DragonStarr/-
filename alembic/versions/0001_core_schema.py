@@ -16,7 +16,7 @@ def upgrade() -> None:
         "tenants",
         sa.Column("id", sa.String(64), primary_key=True),
         sa.Column("title", sa.String(200), nullable=False),
-        sa.Column("plan", sa.String(64), nullable=False, server_default="pilot"),
+        sa.Column("plan", sa.String(64), nullable=False, server_default="safe_test"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     op.create_table(

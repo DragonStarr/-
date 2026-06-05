@@ -1,5 +1,6 @@
 import pytest
 
+from operator_day.connectors.base import MarketplaceClient
 from operator_day.connectors.replay import ReplayHub
 from operator_day.connectors.safety import (
     MarketplaceOperation,
@@ -54,3 +55,7 @@ async def test_replay_hub_reports_capabilities() -> None:
     assert len(capabilities) == 3
     assert capabilities[0].mode == "replay"
     assert capabilities[0].capabilities["catalog"] == "ready"
+
+
+def test_marketplace_client_requires_explicit_capability_validation() -> None:
+    assert "validate_capabilities" in MarketplaceClient.__abstractmethods__

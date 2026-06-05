@@ -5,7 +5,7 @@
 1. Start dependencies with `docker compose -f infra/compose/dev.yml up -d`.
 2. Pull a local model in Ollama, for example `ollama pull qwen3:8b`.
 3. Put secrets only in `.env`.
-4. Run migrations before live pilot.
+4. Run migrations before safe test or live operation.
 
 ## Release Gate
 
