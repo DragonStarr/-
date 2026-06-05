@@ -96,9 +96,9 @@ Local/test-only headers:
 
 Readiness statuses:
 
-- `ready_for_safe_pilot`: backend, bot and Mini App are usable for a safe test with connected/imported tenant data, but live marketplace writes remain locked.
-- `blocked_for_live_pilot`: at least one real account, claim policy, marketplace verification step or LLM architecture gate is missing before real seller/PVZ operation.
-- `ready_for_live_pilot`: accounts are validated, source-linked claim windows are present and an architecture gate pass is recorded.
+- `ready_for_safe_test`: backend, bot and Mini App are usable for a safe test with connected/imported tenant data, but live marketplace writes remain locked.
+- `blocked_for_live_use`: at least one real account, claim policy, marketplace verification step or LLM architecture gate is missing before real seller/PVZ operation.
+- `ready_for_live_use`: accounts are validated, source-linked claim windows are present and an architecture gate pass is recorded.
 
 Final release gate:
 

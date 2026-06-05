@@ -36,7 +36,7 @@
 - User-facing Russian should be simple: buttons and clear outcomes, not technical commands.
 - Do not show fake Telegram status bars or phone chrome inside the Mini App.
 - Separate "план сохранён / проверено без ключей" from "выполнено".
-- Avoid saying "пилот" in the product UI. Use "безопасный тест" for simulated mode and "живая работа" for real mode.
+- Avoid intermediate-product wording in the product UI. Use "безопасный тест" for simulated mode and "живая работа" for real mode.
 
 ## Git
 

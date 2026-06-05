@@ -171,14 +171,14 @@ class ReplayHub:
         return [
             ClaimCandidate(
                 platform=Platform.OZON,
-                claim_id="pilot-lost-1",
+                claim_id="safe-test-lost-1",
                 claim_type="lost_or_damaged",
                 sku="OZ-501",
                 amount=12400,
                 reason="Расхождение по складу: товар отгружен, но не отражен в компенсации.",
                 evidence=("отгрузка", "остатки", "финотчет"),
                 discovered_at=datetime.now(UTC) - timedelta(days=1),
-                source="pilot-data",
+                source="safe-test-data",
             )
         ]
 
@@ -188,12 +188,12 @@ class ReplayHub:
     async def pvz_points(self) -> list[PvzPoint]:
         return [
             PvzPoint(
-                point_id="pilot-pvz-1",
-                title="ПВЗ пилот",
+                point_id="safe-test-pvz-1",
+                title="ПВЗ безопасный тест",
                 monthly_turnover=1_800_000,
                 employees=(
-                    PvzEmployee("pilot-anna", "Анна", 220),
-                    PvzEmployee("pilot-igor", "Игорь", 220),
+                    PvzEmployee("safe-test-anna", "Анна", 220),
+                    PvzEmployee("safe-test-igor", "Игорь", 220),
                 ),
             )
         ]
@@ -709,7 +709,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
     fallback: dict[str, list[dict[str, Any]]] = {
         "rule_changes": [
             {
-                "id": "pilot-rule-tariff-1",
+                "id": "safe-test-rule-tariff-1",
                 "title": "Изменился тариф хранения",
                 "source": "official-rules-radar",
                 "source_url": "https://seller.wildberries.ru/help-center",
@@ -721,7 +721,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
         ],
         "cash_ops": [
             {
-                "id": "pilot-cash-1",
+                "id": "safe-test-cash-1",
                 "title": "Операции ПВЗ готовы к выгрузке",
                 "source": "pvz-cashbox",
                 "amount": 142300,
@@ -732,7 +732,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
         ],
         "studio_specs": [
             {
-                "id": "pilot-studio-1",
+                "id": "safe-test-studio-1",
                 "title": "Пользователь просит кнопку сверки отчета",
                 "source": "operator-studio",
                 "module_id": "M08_FINANCE",
@@ -742,7 +742,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
         ],
         "incidents": [
             {
-                "id": "pilot-supervisor-1",
+                "id": "safe-test-supervisor-1",
                 "title": "Проверка лимитов выявила риск возврата",
                 "source": "health",
                 "risk_type": "return_risk",
@@ -766,7 +766,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
         ],
         "eval_runs": [
             {
-                "id": "pilot-eval-1",
+                "id": "safe-test-eval-1",
                 "title": "Проверка качества ответов",
                 "source": "feedback-loop",
                 "score": 0.82,
@@ -776,7 +776,7 @@ def _fallback_operational_records(kind: str) -> list[dict[str, Any]]:
         ],
         "source_changes": [
             {
-                "id": "pilot-source-1",
+                "id": "safe-test-source-1",
                 "title": "GitHub: обновлён durable workflow референс",
                 "source": "github-radar",
                 "source_url": "https://github.com/restatedev/restate",

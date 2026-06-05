@@ -44,7 +44,7 @@ def test_production_requires_token_encryption_key() -> None:
 
 
 def test_any_non_local_environment_requires_real_runtime_secrets() -> None:
-    settings = Settings(app_env="pilot", allow_demo_auth=True, token_encryption_key="")
+    settings = Settings(app_env="safe_test", allow_demo_auth=True, token_encryption_key="")
 
     try:
         settings.validate_runtime()

@@ -17,7 +17,7 @@ async def test_readiness_reports_modules_capabilities_and_blockers() -> None:
     assert body["moduleCount"] == 23
     assert body["skillsAndPlugins"] >= 30
     assert body["checksPerAction"] == 10
-    assert body["status"] == "ready_for_safe_pilot"
+    assert body["status"] == "ready_for_safe_test"
     assert body["mode"] == "safe_test"
     assert body["architectureGatePassed"] is False
     assert body["claimDeadlinePolicies"] == 0
@@ -45,7 +45,7 @@ async def test_readiness_reports_live_blocked_until_account_is_validated() -> No
         response = await client.get("/api/readiness", headers=headers)
 
     body = response.json()
-    assert body["status"] == "blocked_for_live_pilot"
+    assert body["status"] == "blocked_for_live_use"
     assert body["mode"] == "live"
     assert "marketplace_api_verification" in body["blockers"]
     assert "claim_deadline_policies" in body["blockers"]

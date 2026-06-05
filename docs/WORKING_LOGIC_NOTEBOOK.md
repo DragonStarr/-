@@ -15,7 +15,7 @@
 - M23 `AccountGuardModule`: белая защита от скликивания/самовыкупов, без серых схем.
 - M13: ранжирование по формуле `money + urgency + risk + confidence`; дедлайн меньше 24 часов идет наверх.
 - M16: бюджет LLM и token usage нужен поверх FreeModel; LiteLLM подтвержден как хороший слой бюджетов, но не обязателен для первой трассирующей пули.
-- API-контекст больше не общий demo: `X-Tenant-Id`, `X-User-Id`, `X-Role` дают server-side tenant/user/role для пилота.
+- API-контекст больше не общий demo: `X-Tenant-Id`, `X-User-Id`, `X-Role` дают server-side tenant/user/role для безопасного теста и живой работы.
 - Подключение кабинетов хранит только encrypted token и fingerprint; capabilities показывают, что готово, где нужны credentials, а где нужна API verification.
 - Проверка кабинета отделена от подключения: `/api/accounts/{account_id}/validate` делает safe read-probe или dry-run плана; только live-успех переводит account status в `validated`.
 - Каждое действие несет полный набор 30+ `skills`/`plugins`, 10 `mcp_checks` и `answer_basis`: бот обязан объяснять основу решения, а не просто предлагать кнопку.
@@ -26,27 +26,27 @@
 - Добавлен `connectors.catalog`: Ozon seller/performance operations описаны через `operation_id`, endpoint, safety и rate-limit key; live-клиент должен использовать этот каталог, а не произвольные строки.
 - Добавлен `connectors.transport`: HTTPX async transport, routing по host платформы/операции, path params, safety до сети, retry на 429/5xx, `Retry-After`, redaction ошибок.
 - Добавлен safe dry-run для marketplace operations: write/destructive можно показать как план без сетевого вызова и без подтверждения, но реальный write по-прежнему требует `confirm_write`.
-- Readiness теперь считает `marketplace_api_verification` блокером по статусу account validation, а не по всем optional capability-флагам отдельных модулей; статус разделяет `ready_for_safe_pilot`, `blocked_for_live_pilot` и `ready_for_live_pilot`.
+- Readiness теперь считает `marketplace_api_verification` блокером по статусу account validation, а не по всем optional capability-флагам отдельных модулей; статус разделяет `ready_for_safe_test`, `blocked_for_live_use` и `ready_for_live_use`.
 - Добавлен `connectors.pagination`: Ozon `last_id` pagination с защитой от повторного cursor.
 - Добавлен `OzonCatalogSync`: первая точка live-sync для каталога Ozon поверх transport/pagination.
 - Добавлен `plan_catalog_sync_for_account`, API `/api/accounts/{account_id}/sync/catalog`, общий `sync_catalog_for_account` и Celery `operator_day.sync_catalog`: live-sync WB/Ozon/Яндекс берёт encrypted account token, расшифровывает только внутри сервиса, пишет audit без секрета.
 - Live-sync каталога сохраняет строки в `products`; `DatabaseReplayHub` в API/Telegram берет tenant-данные из БД, а при пустой БД возвращает setup/empty state без подстановки фиктивных товаров.
-- Добавлен owner-only `/api/catalog/import`: пилотный селлер может загрузить товары вручную, если API кабинета ещё не проверен или временно не отдаёт каталог; импорт пишет `products`, `audit_log` и сразу кормит утренние дела бота.
+- Добавлен owner-only `/api/catalog/import`: селлер может загрузить товары вручную для безопасного теста, если API кабинета ещё не проверен или временно не отдаёт каталог; импорт пишет `products`, `audit_log` и сразу кормит утренние дела бота.
 - Добавлен `/api/reviews/import` и DB-backed M5: отзывы и вопросы берутся из `reviews`, сохраняют платформу/source/buyer question, положительный ответ подтверждается через `confirm`, негатив остается human-only.
 - Добавлены WB/Yandex операции в connector catalog на основе свежих GitHub/официальных источников.
 - Добавлены source-linked `claim_deadline_policies`: сроки претензий не хардкодим, owner записывает источник.
 - Добавлен `/api/claims/import` и DB-backed M20: претензии берутся из `claims`, сверяются с `claim_deadline_policies`, в payload явно пишется сумма, доказательства, источник срока и флаг `claim_deadline_needs_verification`.
 - Добавлен `/api/pvz/import` и DB-backed M11: точки и сотрудники берутся из `pvz_points`/`pvz_employees`, график 2/2 и payroll считаются по индивидуальным ставкам, оператор ПВЗ не может менять штат.
-- Внешние `pointId`/`employeeId` из ПВЗ-импорта не используются как глобальные primary key: внутри БД они scoped по tenant/point hash, а наружу и в задачи возвращается исходный ID. Это защищает пилот от конфликта двух владельцев с одинаковыми ID из своих ЛК/таблиц.
+- Внешние `pointId`/`employeeId` из ПВЗ-импорта не используются как глобальные primary key: внутри БД они scoped по tenant/point hash, а наружу и в задачи возвращается исходный ID. Это защищает безопасный тест и живую работу от конфликта двух владельцев с одинаковыми ID из своих ЛК/таблиц.
 - Добавлен owner-only `/api/brain/architecture-review`: LLM проверяет дерево ЛК/API -> transport -> workers -> БД -> orchestrator -> Telegram.
 - Добавлен owner-only `/api/brain/architecture-gate`: backend отдает machine-readable topology по ЛК/API, серверам, workers, БД, коннекторам и readiness gates; локальный LLM является базовым ревьюером, внешний провайдер запускается только при `?live=true`, ключе в env и `LLM_SMOKE_ENABLED=true`, иначе возвращается безопасный offline/fallback результат без расхода токенов.
 - LLM router работает через локальный/offline режим и OpenAI-compatible внешний endpoint из env; он сверяет фактически возвращенный `model/provider`, чтобы подмена модели не считалась успешным live gate.
-- Readiness учитывает `llm_architecture_gate`: live-пилот не считается готовым, пока успешный architecture gate не записан в `audit_log` как `architecture_gate_passed`.
+- Readiness учитывает `llm_architecture_gate`: живая работа не считается готовой, пока успешный architecture gate не записан в `audit_log` как `architecture_gate_passed`.
 - Добавлен owner-only `/api/brain/llm-status`: доступность модели проверяется без раскрытия ключа; live model-list smoke запускается только при `LLM_SMOKE_ENABLED=true`, чтобы не тратить лимит случайным открытием endpoint.
 - Добавлен `bind_tenant_scope`: PostgreSQL-сессия выставляет `app.tenant_id` перед tenant-bound операциями, чтобы RLS политики работали не только в миграции.
 - Исправлена схема: `stocks` получил `tenant_id`; Alembic initial schema теперь покрывает все ORM tables, включая `reviews`, `audit_log`, `action_executions`, `claim_deadline_policies`.
 - Добавлен production guard: `APP_ENV=production` не стартует без `TOKEN_ENCRYPTION_KEY`.
-- Добавлен owner-only `/api/operational-data/import`: пилотный владелец может загрузить живые строки по правилам, кассе, студии, инцидентам, оценкам и новостям, если внешний API или crawler еще не подключены. Импорт пишет tenant-scoped JSON records и audit без чужих данных.
+- Добавлен owner-only `/api/operational-data/import`: владелец может загрузить живые строки по правилам, кассе, студии, инцидентам, оценкам и новостям, если внешний API или crawler еще не подключены. Импорт пишет tenant-scoped JSON records и audit без чужих данных.
 - M12/M14/M15/M16/M17/M18 теперь DB-backed: `DatabaseReplayHub.operational_records()` берет `rule_changes`, `cash_ops`, `receipts`, `studio_specs`, `studio_builds`, `incidents`, `alerts`, `eval_runs`, `source_changes`, `knowledge_proposals`; фиктивный fallback доступен только в локальных тестах при явном `ALLOW_DEMO_FIXTURES=true`.
 - M12 `RulesModule`: пересчитывает влияние правила из `rule_changes`, сохраняет `rule_versions`, показывает source URL/confidence и не применяет правило автоматически.
 - M14 `AccountingModule`: сверяет `cash_ops` и `receipts`, считает несостыкованную сумму, сохраняет `receipts` как accounting export и эскалирует расхождение по деньгам.

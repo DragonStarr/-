@@ -502,7 +502,7 @@ class UserRepository:
             await bind_tenant_scope(self.session, ctx)
             return ctx
 
-        tenant = Tenant(id=f"tg-{tg_id}", title=name or f"Telegram {tg_id}", plan="pilot")
+        tenant = Tenant(id=f"tg-{tg_id}", title=name or f"Telegram {tg_id}", plan="safe_test")
         user = User(
             tenant_id=tenant.id,
             tg_id=tg_id,

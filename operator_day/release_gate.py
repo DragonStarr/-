@@ -55,133 +55,133 @@ async def build_release_gate(
     criteria = [
         _criterion(
             1,
-            "Telegram bot",
+            "Бот",
             passed=(root / "operator_day" / "bot" / "handlers.py").exists(),
-            evidence=["bot handlers and webhook entrypoint are present"],
+            evidence=["есть кнопки бота и точка приема сообщений"],
         ),
         _criterion(
             2,
-            "Mini App / personal cabinet",
+            "Личный кабинет",
             passed=(root / "apps" / "miniapp" / "src" / "operator-day-app.tsx").exists(),
-            evidence=["Mini App shell, bottom navigation and action sheet are present"],
+            evidence=["есть нижние кнопки, главная сводка и лист подтверждения"],
         ),
         _criterion(
             3,
-            "Marketplace and PVZ account connection",
+            "Подключение кабинетов и ПВЗ",
             passed=bool(accounts),
             simulation=simulation,
             blockers=["real_marketplace_tokens"] if not accounts else [],
             external_blockers=external,
-            evidence=[f"connected accounts: {len(accounts)}"],
+            evidence=[f"подключено кабинетов: {len(accounts)}"],
         ),
         _criterion(
             4,
-            "Daily action queue",
+            "Очередь дел на день",
             passed=settings.morning_scheduler_enabled,
             blockers=[] if settings.morning_scheduler_enabled else ["morning_scheduler"],
-            evidence=["morning scheduler and /api/tasks/morning are enabled"],
+            evidence=["утренний сбор дел включен"],
         ),
         _criterion(
             5,
-            "All TZ modules",
+            "Все модули ТЗ",
             passed=module_count >= 23,
             blockers=[] if module_count >= 23 else ["module_contracts"],
-            evidence=[f"module contracts: {module_count}"],
+            evidence=[f"модулей в работе: {module_count}"],
         ),
         _criterion(
             6,
-            "Action-first flow, not checklists",
+            "Действия вместо чек-листов",
             passed=True,
-            evidence=["task confirmation endpoint records result or safe plan"],
+            evidence=["каждое дело можно открыть, проверить и подтвердить"],
         ),
         _criterion(
             7,
-            "Planned vs actually executed separation",
+            "Честное разделение плана и выполнения",
             passed=True,
-            evidence=["dry-run and local artifacts return planned/not_attempted, not done"],
+            evidence=["без живых ключей система сохраняет план, а не пишет, что все выполнено"],
         ),
         _criterion(
             8,
-            "Safe confirmation and idempotency",
+            "Безопасное подтверждение",
             passed=True,
-            evidence=["confirmation uses role checks, idempotency key and audit result store"],
+            evidence=["есть роль, повторная защита и запись результата"],
         ),
         _criterion(
             9,
-            "Database and tenant data model",
+            "База данных и разделение клиентов",
             passed=bool(settings.database_url) and (root / "alembic").exists(),
-            evidence=["database URL is configured and migrations folder exists"],
+            evidence=["данные продавцов и ПВЗ хранятся отдельно"],
         ),
         _criterion(
             10,
-            "Autonomous server runtime",
+            "Автономный сервер",
             passed=(root / "operator_day" / "main.py").exists()
             and (root / "docker-compose.yml").exists(),
-            evidence=["FastAPI app, scheduler lifespan and docker compose are present"],
+            evidence=["сервер, расписание и контейнерный запуск подготовлены"],
         ),
         _criterion(
             11,
-            "LLM architecture layer",
+            "Слой ИИ-проверки",
             passed=architecture_gate_passed,
             simulation=simulation,
             blockers=[] if architecture_gate_passed else ["prod_llm_gate"],
             external_blockers=external,
-            evidence=[f"primary model: {settings.freemodel_model or settings.local_llm_model}"],
+            evidence=[f"основная модель: {settings.freemodel_model or settings.local_llm_model}"],
         ),
         _criterion(
             12,
-            "Marketplace rules and source radar",
+            "Правила площадок и слежение за изменениями",
             passed=True,
-            evidence=["radar module and source-change operational records are present"],
+            evidence=["есть модуль правил и записи об изменениях источников"],
         ),
         _criterion(
             13,
-            "Self-update safety pipeline",
+            "Безопасное самообновление",
             passed=settings.self_update_checks_enabled,
             blockers=[] if settings.self_update_checks_enabled else ["self_update_checks"],
-            evidence=["self-update plan/run endpoints and gated repository are present"],
+            evidence=["обновления проходят проверки и не включаются вслепую"],
         ),
         _criterion(
             14,
-            "Fault tolerance and graceful failure",
+            "Отказоустойчивость",
             passed=True,
-            evidence=["marketplace failures are masked and no external write is assumed"],
+            evidence=["сбои площадок не превращаются в ложное выполнение"],
         ),
         _criterion(
             15,
-            "Roles and access control",
+            "Роли и доступ",
             passed=(root / "operator_day" / "policies.py").exists(),
-            evidence=["owner/manager/PVZ/support policies are enforced"],
+            evidence=["владелец, менеджер, ПВЗ и поддержка имеют разные права"],
         ),
         _criterion(
             16,
-            "Audit trail",
+            "История действий",
             passed=(root / "operator_day" / "models.py").exists(),
-            evidence=["actions write audit events without plain secrets"],
+            evidence=["действия записываются без раскрытия ключей"],
         ),
         _criterion(
             17,
-            "Automated tests across product directions",
+            "Тесты по направлениям продукта",
             passed=_test_surface_present(root),
             evidence=[
                 (
-                    "backend, API, live-sync, seller/PVZ rehearsal, readiness, "
-                    "bot and Mini App checks are present"
+                    "сервер, API, синхронизация, продавец, ПВЗ, готовность, "
+                    "бот и личный кабинет покрыты проверками"
                 )
             ],
         ),
         _criterion(
             18,
-            "Git and deployment handoff",
+            "Git и передача проекта",
             passed=_git_remote_configured(root),
             simulation=simulation,
             blockers=["git_remote_url"] if not _git_remote_configured(root) else [],
             external_blockers=external,
-            evidence=["local git repository is present"],
+            evidence=["локальная история проекта есть"],
         ),
         _criterion(
             19,
-            "Seller/PVZ battle rehearsal",
+            "Репетиция продавца и ПВЗ",
             passed=bool(accounts) and architecture_gate_passed,
             simulation=simulation,
             blockers=[
@@ -190,7 +190,7 @@ async def build_release_gate(
                 if blocker in external
             ],
             external_blockers=external,
-            evidence=["real flow is rehearsed with service virtualization when keys are absent"],
+            evidence=["реальный путь прогоняется с имитацией внешних сервисов без ключей"],
         ),
     ]
     criteria.append(_final_criterion(criteria, live_blockers=live_blockers, simulation=simulation))
@@ -278,24 +278,24 @@ def _final_criterion(
     if local_blockers:
         return ReleaseCriterion(
             id=20,
-            title="Final handoff gate",
+            title="Финальная сдача",
             status="blocked",
-            evidence=["final handoff waits until every local criterion is closed"],
+            evidence=["сдача ждет закрытия каждого локального пункта"],
             blockers=sorted(set(local_blockers)),
         )
     if simulation or live_blockers:
         return ReleaseCriterion(
             id=20,
-            title="Final handoff gate",
+            title="Финальная сдача",
             status="simulated",
-            evidence=["local product path is closed under simulated external services"],
+            evidence=["локальный путь закрыт с имитацией внешних сервисов"],
             blockers=live_blockers,
         )
     return ReleaseCriterion(
         id=20,
-        title="Final handoff gate",
+        title="Финальная сдача",
         status="passed",
-        evidence=["all local and live criteria are closed"],
+        evidence=["все локальные и живые пункты закрыты"],
         blockers=[],
     )
 

@@ -1565,9 +1565,9 @@ function capabilityStatusName(status: string) {
 }
 
 function readinessLabel(status?: string) {
-  if (status === "ready_for_live_pilot") return "готов к живой работе";
-  if (status === "blocked_for_live_pilot") return "ждёт ключи кабинетов";
-  if (status === "ready_for_safe_pilot") return "готов к безопасному тесту";
+  if (status === "ready_for_live_use") return "готов к живой работе";
+  if (status === "blocked_for_live_use") return "ждёт ключи кабинетов";
+  if (status === "ready_for_safe_test") return "готов к безопасному тесту";
   return "проверяется";
 }
 

@@ -8,7 +8,7 @@ def render_prometheus_metrics(*, readiness_status: str = "unknown") -> str:
     module_count = len(ModuleRegistry.default().modules) + 1
     skill_count = len(all_operator_capabilities())
     check_count = len(CORE_MCP_CHECKS)
-    ready_value = 1 if readiness_status == "ready_for_live_pilot" else 0
+    ready_value = 1 if readiness_status == "ready_for_live_use" else 0
     lines = [
         "# HELP operator_day_modules_total Registered operator modules.",
         "# TYPE operator_day_modules_total gauge",
@@ -19,8 +19,8 @@ def render_prometheus_metrics(*, readiness_status: str = "unknown") -> str:
         "# HELP operator_day_mcp_checks_per_action Required MCP-style checks per action.",
         "# TYPE operator_day_mcp_checks_per_action gauge",
         f"operator_day_mcp_checks_per_action {check_count}",
-        "# HELP operator_day_ready_for_live_pilot Live pilot readiness flag.",
-        "# TYPE operator_day_ready_for_live_pilot gauge",
-        f"operator_day_ready_for_live_pilot {ready_value}",
+        "# HELP operator_day_ready_for_live_use Live readiness flag.",
+        "# TYPE operator_day_ready_for_live_use gauge",
+        f"operator_day_ready_for_live_use {ready_value}",
     ]
     return "\n".join(lines) + "\n"

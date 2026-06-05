@@ -30,7 +30,7 @@ class Tenant(Base):
     __tablename__ = "tenants"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     title: Mapped[str] = mapped_column(String(200))
-    plan: Mapped[str] = mapped_column(String(64), default="pilot")
+    plan: Mapped[str] = mapped_column(String(64), default="safe_test")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

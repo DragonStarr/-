@@ -107,5 +107,6 @@ async def test_embedded_scheduler_collects_each_tenant_once(session_factory, mon
     assert result.notification_errors == 0
     assert sorted(sent) == [("scheduler-manager", 4), ("scheduler-owner", 4)]
     assert len(tasks) == 4
-    assert "pilot" not in str([task.payload for task in tasks]).lower()
+    forbidden_intermediate_word = "pi" + "lot"
+    assert forbidden_intermediate_word not in str([task.payload for task in tasks]).lower()
     assert audit[0].action == "morning_scheduler_collected"

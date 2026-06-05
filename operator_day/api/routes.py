@@ -479,11 +479,11 @@ async def readiness(session: SessionDep, ctx: ContextDep) -> dict:
         blockers.append("morning_scheduler")
     if not get_settings().self_update_checks_enabled:
         blockers.append("self_update_checks")
-    status = "ready_for_live_pilot"
+    status = "ready_for_live_use"
     if "real_marketplace_tokens" in blockers:
-        status = "ready_for_safe_pilot"
+        status = "ready_for_safe_test"
     elif blockers:
-        status = "blocked_for_live_pilot"
+        status = "blocked_for_live_use"
     return {
         "status": status,
         "mode": mode,
